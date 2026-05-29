@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Block Search — AutoCAD Library</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg role='img' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.8672 1.0527v0.0157L0 3.3848v17.914l3.8965 -2.332h18.3398V2.3301c0 -0.702 -0.5773 -1.2774 -1.2793 -1.2774H3.8672zm7.5058 4.0098h3.3008l2.9844 9.9512h-2.5879l-0.5683 -2.1895h-2.9844l-0.5703 2.1621h-2.416l2.8417 -9.9238zm11.8633 0.0273v14.877H4.172l-2.0684 1.2383v0.4648c0 0.702 0.5793 1.2774 1.2813 1.2774H24V5.0898h-0.7637zM12.9668 6.6816l-0.9941 4.3243h2.0468l-1.0527 -4.3243z' fill='%234493f8'/%3E%3C/svg%3E"/>
+<style>
+/* ═══════════════════════════════════════════════════════════════
+   CSS Reset + Variables
+═══════════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg0:       #0f0f0f;
+  --bg1:       #161616;
+  --bg2:       #1e1e1e;
+  --bg3:       #252526;
+  --bg4:       #2d2d30;
+  --bg5:       #3e3e42;
+  --border:    #3f3f46;
+  --accent:    #0078d4;
+  --accent2:   #1a86d9;
+  --accent3:   #003d6b;
+  --text0:     #ffffff;
+  --text1:     #d4d4d4;
+  --text2:     #9d9d9d;
+  --text3:     #5a5a5a;
+  --green:     #4ec9b0;
+  --yellow:    #dcdcaa;
+  --red:       #f44747;
+  --orange:    #ce9178;
+  --purple:    #c586c0;
+  --sidebar-w: 300px;
+  --topbar-h:  52px;
+  --radius:    6px;
+  --font:      'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono:      'Cascadia Code', 'Consolas', monospace;
+}
+
+body {
+  font-family: var(--font);
+  font-size: 13px;
+  background: var(--bg0);
+  color: var(--text1);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Top Bar
+═══════════════════════════════════════════════════════════════ */
+#topbar {
+  height: var(--topbar-h);
+  background: var(--bg1);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+#app-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  -webkit-app-region: no-drag;
+}
+#app-logo svg { width:28px; height:28px; flex-shrink:0; }
+#app-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text0);
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+#topbar-spacer { flex: 1; }
+
+#topbar-stats {
+  font-size: 11px;
+  color: var(--text2);
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+
+#btn-settings {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text2);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  -webkit-app-region: no-drag;
+  transition: all 0.15s;
+}
+#btn-settings:hover { background: var(--bg4); color: var(--text0); border-color: var(--accent); }
+
+/* ═══════════════════════════════════════════════════════════════
+   Layout: sidebar + main
+═══════════════════════════════════════════════════════════════ */
+#layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Left Sidebar — Path & Search Controls
+═══════════════════════════════════════════════════════════════ */
+#sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg1);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.sidebar-section {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+
+/* Path Input Row */
+.path-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.path-input {
+  flex: 1;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text1);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--mono);
+  outline: none;
+  min-width: 0;
+  transition: border-color 0.15s;
+  user-select: text;
+}
+.path-input:focus { border-color: var(--accent); }
+.path-input::placeholder { color: var(--text3); font-family: var(--font); }
+
+.icon-btn {
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text1);
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+.icon-btn:hover { background: var(--bg5); border-color: var(--accent); }
+.icon-btn.danger:hover { background: #3d1a1a; border-color: var(--red); color: var(--red); }
+
+.path-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.path-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 5px 8px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text1);
+}
+.path-chip.active { border-color: var(--accent); background: var(--accent3); }
+.path-chip span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.path-chip .chip-del {
+  background: none; border: none; color: var(--text3); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 2px; border-radius: 3px;
+}
+.path-chip .chip-del:hover { color: var(--red); }
+
+/* ─── Scan Buttons ─── */
+.scan-row {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-primary {
+  flex: 1;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: var(--accent2); }
+.btn-primary:disabled { background: var(--bg5); color: var(--text3); cursor: not-allowed; }
+
+.btn-ghost {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text2);
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-ghost:hover { background: var(--bg4); color: var(--text0); }
+
+/* Progress */
+#progress-wrap {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: block;
+}
+#progress-bar-bg {
+  height: 4px;
+  background: var(--bg4);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+#progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.25s ease;
+}
+#progress-bar-fill.indeterminate {
+  width: 35%;
+  animation: slide 1.1s linear infinite;
+}
+@keyframes slide {
+  0%   { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
+
+/* progress meta */
+#progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 5px;
+}
+#progress-status { font-size: 11px; color: var(--text2); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#progress-pct    { font-size: 11px; font-family: var(--mono); color: var(--accent); flex-shrink:0; padding-left:8px; }
+#progress-file   { font-size: 10px; color: var(--text3); font-family: var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:3px; min-height:14px; }
+
+/* bottom status bar */
+#statusbar {
+  height: 22px;
+  background: var(--bg1);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 6px;
+  flex-shrink: 0;
+  transition: background 0.3s, border-color 0.3s;
+}
+#statusbar.scanning { background: var(--accent3); border-top-color: var(--accent); }
+#statusbar.done     { background: #162e25; border-top-color: var(--green); }
+#statusbar.warn     { background: #2e2010; border-top-color: var(--yellow); }
+#statusbar.error    { background: #2e1212; border-top-color: var(--red); }
+.sb-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--text3); flex-shrink: 0;
+}
+#statusbar.scanning .sb-dot { background: var(--accent); animation: pulse 0.9s infinite; }
+#statusbar.done     .sb-dot { background: var(--green); }
+#statusbar.warn     .sb-dot { background: var(--yellow); }
+#statusbar.error    .sb-dot { background: var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+#sb-text  { font-size: 11px; color: var(--text2); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#sb-right { font-size: 11px; color: var(--text3); white-space:nowrap; flex-shrink:0; }
+
+/* topbar spinner */
+#topbar-spinner {
+  width: 16px; height: 16px;
+  border: 2px solid var(--bg5);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  display: none;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+#progress-status { font-size: 11px; color: var(--text2); }
+
+/* ─── Search Category Tabs ─── */
+.cat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 12px 14px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cat-tab {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text2);
+  padding: 4px 12px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.cat-tab:hover { background: var(--bg4); color: var(--text1); }
+.cat-tab.active {
+  background: var(--accent3);
+  border-color: var(--accent);
+  color: var(--text0);
+  font-weight: 600;
+}
+
+/* ─── Keyword Search in Sidebar ─── */
+.search-section {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.search-box-wrap {
+  position: relative;
+}
+.search-box-wrap .search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text3);
+  font-size: 14px;
+  pointer-events: none;
+}
+#search-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text1);
+  padding: 8px 32px 8px 34px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+  user-select: text;
+}
+#search-input:focus { border-color: var(--accent); }
+#search-input::placeholder { color: var(--text3); }
+
+.clear-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  display: none;
+}
+.clear-btn:hover { color: var(--text1); }
+.clear-btn.visible { display: block; }
+
+/* ─── ODA status banner ─── */
+#oda-banner {
+  margin: 10px 14px 0;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid transparent;
+}
+#oda-banner.ok {
+  background: #162e25;
+  border-color: var(--green);
+  color: var(--green);
+}
+#oda-banner.warn {
+  background: #2d2410;
+  border-color: var(--yellow);
+  color: var(--yellow);
+}
+.oda-banner-row { display:flex; align-items:center; gap:6px; }
+.oda-banner-icon { font-size:13px; flex-shrink:0; }
+.oda-banner-text { flex:1; line-height:1.4; }
+.oda-banner-text strong { display:block; margin-bottom:2px; }
+.oda-banner-btns { display:flex; gap:5px; }
+.oda-btn {
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text1);
+  font-size: 11px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.oda-btn:hover { background: var(--accent); border-color: var(--accent); color:#fff; }
+.oda-btn.primary { background: var(--accent); border-color: var(--accent); color:#fff; }
+.oda-btn.primary:hover { background: var(--accent2); }
+
+/* ─── Alias shortcuts (bottom of sidebar) ─── */
+#sidebar-footer {
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+}
+#sidebar-footer kbd {
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text2);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Main Content Area
+═══════════════════════════════════════════════════════════════ */
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg2);
+}
+
+/* ─── Results Header ─── */
+#results-header {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+#results-count {
+  font-size: 12px;
+  color: var(--text2);
+}
+#results-count strong { color: var(--text1); }
+
+#results-header-spacer { flex: 1; }
+
+.sort-label { font-size: 11px; color: var(--text3); }
+#sort-select {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text1);
+  padding: 4px 8px;
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+
+/* ─── Table ─── */
+#table-wrap {
+  flex: 1;
+  overflow: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+thead th {
+  background: var(--bg3);
+  color: var(--text3);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+}
+thead th:hover { color: var(--text1); background: var(--bg4); }
+thead th .sort-arrow { margin-left: 4px; opacity: 0.4; }
+thead th.sorted .sort-arrow { opacity: 1; color: var(--accent); }
+.col-resizer {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 3;
+  border-right: 2px solid transparent;
+  transition: border-color 0.15s;
+}
+.col-resizer:hover, .col-resizer.dragging {
+  border-right-color: var(--accent);
+}
+
+tbody tr {
+  border-bottom: 1px solid #1a1a1a;
+  cursor: pointer;
+  transition: background 0.08s;
+}
+tbody tr:hover { background: var(--bg3); }
+tbody tr.selected { background: #0d2d47; }
+tbody tr.selected:hover { background: #0e3352; }
+
+td {
+  padding: 9px 12px;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+}
+td.col-path {
+  white-space: normal;
+  word-break: break-all;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+  font-size: 11px;
+  color: var(--text2);
+  line-height: 1.5;
+}
+
+.col-score { width: 58px; text-align: center; min-width: 44px; }
+.col-name  { width: 22%; min-width: 80px; }
+.col-file  { width: 16%; min-width: 60px; }
+.col-folder{ width: 14%; min-width: 60px; }
+.col-path  { width: 40%; min-width: 120px; }
+.col-acts  { width: 52px; text-align: center; min-width: 44px; }
+
+.score-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: var(--mono);
+}
+.score-high { background: #1a3d35; color: var(--green); }
+.score-med  { background: #37341a; color: var(--yellow); }
+.score-low  { background: var(--bg4); color: var(--text3); }
+
+.name-cell { font-weight: 600; color: var(--text0); font-family: var(--mono); font-size: 12px; }
+.name-cell .attr-tags { display: block; font-size: 10px; color: var(--text3); font-weight: 400; margin-top: 1px; }
+
+.file-cell { color: var(--text1); }
+.folder-cell { color: var(--text2); font-size: 11px; }
+.path-cell { color: var(--text3); font-size: 11px; font-family: var(--mono); }
+
+.row-actions { display: flex; gap: 4px; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.1s; padding: 0 4px; }
+tbody tr:hover .row-actions,
+tbody tr.selected .row-actions { opacity: 1; }
+.row-btn {
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text2);
+  padding: 3px 5px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  transition: all 0.1s;
+}
+.row-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ─── Empty State ─── */
+#empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 14px;
+  color: var(--text3);
+  text-align: center;
+  padding: 40px;
+}
+#empty-state svg { opacity: 0.2; }
+#empty-state h3 { font-size: 16px; color: var(--text2); font-weight: 500; }
+#empty-state p { font-size: 12px; line-height: 1.7; max-width: 360px; }
+
+/* ─── Toast Notification ─── */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 18px;
+  font-size: 12px;
+  color: var(--text1);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  opacity: 0;
+  z-index: 999;
+  white-space: nowrap;
+}
+#toast.show {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+}
+#toast.success { border-color: var(--green); color: var(--green); }
+#toast.error   { border-color: var(--red);   color: var(--red);   }
+
+/* ═══════════════════════════════════════════════════════════════
+   Settings Panel (slide-in from right)
+═══════════════════════════════════════════════════════════════ */
+#settings-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 100;
+  display: none;
+}
+#settings-overlay.open { display: block; }
+
+#settings-panel {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 380px;
+  background: var(--bg1);
+  border-left: 1px solid var(--border);
+  z-index: 101;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+  overflow-y: auto;
+}
+#settings-panel.open { transform: translateX(0); }
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+}
+.settings-header h2 { font-size: 14px; font-weight: 600; flex: 1; }
+.settings-close {
+  background: none; border: none; color: var(--text2); cursor: pointer;
+  font-size: 20px; line-height: 1; padding: 2px;
+}
+.settings-close:hover { color: var(--text0); }
+
+.settings-body { padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+
+.settings-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text2);
+  margin-bottom: 8px;
+}
+
+.settings-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text1);
+  padding: 7px 10px;
+  font-size: 12px;
+  outline: none;
+  user-select: text;
+}
+.settings-input:focus { border-color: var(--accent); }
+
+.settings-row { display: flex; gap: 8px; align-items: center; }
+
+.settings-hint {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.settings-save {
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 10px;
+  transition: background 0.15s;
+}
+.settings-save:hover { background: var(--accent2); }
+
+/* ─── Context Menu ─── */
+#ctx-menu {
+  position: fixed;
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+  z-index: 500;
+  display: none;
+  min-width: 190px;
+  overflow: hidden;
+}
+#ctx-menu.open { display: block; }
+.ctx-item {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text1);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background 0.1s;
+}
+.ctx-item:hover { background: var(--accent); color: #fff; }
+.ctx-sep { height: 1px; background: var(--border); margin: 3px 0; }
+.ctx-icon { width: 16px; text-align: center; font-size: 13px; }
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--bg5); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ─── Highlight match ─── */
+.hl { color: var(--accent2); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<!-- ═══ TOP BAR ════════════════════════════════════════════════ -->
+<div id="topbar">
+  <div id="app-logo">
+    <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" width="26" height="26">
+      <path d="M3.8672 1.0527v0.0157L0 3.3848v17.914l3.8965 -2.332h18.3398V2.3301c0 -0.702 -0.5773 -1.2774 -1.2793 -1.2774H3.8672zm7.5058 4.0098h3.3008l2.9844 9.9512h-2.5879l-0.5683 -2.1895h-2.9844l-0.5703 2.1621h-2.416l2.8417 -9.9238zm11.8633 0.0273v14.877H4.172l-2.0684 1.2383v0.4648c0 0.702 0.5793 1.2774 1.2813 1.2774H24V5.0898h-0.7637zM12.9668 6.6816l-0.9941 4.3243h2.0468l-1.0527 -4.3243z" fill="#4493f8"/>
+    </svg>
+    <span id="app-title">Block Search</span>
+  </div>
+  <div id="topbar-spacer"></div>
+  <div id="topbar-spinner"></div>
+  <span id="topbar-stats">Not indexed</span>
+  <button id="btn-settings" onclick="toggleSettings()">⚙ Settings</button>
+</div>
+
+<!-- ═══ LAYOUT ═════════════════════════════════════════════════ -->
+<div id="layout">
+
+  <!-- ─── LEFT SIDEBAR ──────────────────────────────────────── -->
+  <div id="sidebar">
+
+    <!-- Scan Paths -->
+    <div class="sidebar-section">
+      <div class="section-label">DesignCenter Paths</div>
+
+      <div class="path-row">
+        <input id="path-input" class="path-input" type="text"
+               placeholder="C:\AutoCAD\DesignCenter…"
+               onkeydown="if(event.key==='Enter') addPath()"/>
+        <button class="icon-btn" title="Browse folder" onclick="browseAndAdd()">📁</button>
+        <button class="icon-btn" title="Add path" onclick="addPath()">＋</button>
+      </div>
+
+      <div id="path-list" class="path-list"></div>
+
+      <div class="scan-row">
+        <button id="btn-scan" class="btn-primary" onclick="startScan()">▶ Index Paths</button>
+        <button class="btn-ghost" onclick="clearCache()" title="Clear index cache">🗑</button>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div id="progress-wrap">
+      <div id="progress-bar-bg">
+        <div id="progress-bar-fill"></div>
+      </div>
+      <div id="progress-meta">
+        <span id="progress-status">Ready — add paths and click Index Paths</span>
+        <span id="progress-pct"></span>
+      </div>
+      <div id="progress-file"></div>
+    </div>
+
+    <!-- Search Category Tabs -->
+    <div class="cat-tabs" id="cat-tabs">
+      <button class="cat-tab active" data-cat="all"         onclick="setCategory(this)">All</button>
+      <button class="cat-tab"        data-cat="block_name"  onclick="setCategory(this)">Block Name</button>
+      <button class="cat-tab"        data-cat="keyword"     onclick="setCategory(this)">Keyword</button>
+      <button class="cat-tab"        data-cat="attribute"   onclick="setCategory(this)">Attribute Tag</button>
+      <button class="cat-tab"        data-cat="filename"    onclick="setCategory(this)">Filename</button>
+      <button class="cat-tab"        data-cat="title_block" onclick="setCategory(this)">Title Block</button>
+    </div>
+
+    <!-- Keyword Search -->
+    <div class="search-section">
+      <div class="search-box-wrap">
+        <span class="search-icon">⌕</span>
+        <input id="search-input" type="text"
+               placeholder="Search blocks, keywords, tags…"
+               oninput="onSearchInput()"
+               onkeydown="onSearchKeyDown(event)"/>
+        <button class="clear-btn" id="clear-btn" onclick="clearSearch()">×</button>
+      </div>
+    </div>
+
+    <!-- ODA Status Banner -->
+    <div id="oda-banner" class="warn">
+      <div class="oda-banner-row">
+        <span class="oda-banner-icon">⚠</span>
+        <span class="oda-banner-text">
+          <strong id="oda-banner-title">ODA Converter not found</strong>
+          <span id="oda-banner-msg">DWG files cannot be indexed without it.</span>
+        </span>
+      </div>
+      <div class="oda-banner-btns" id="oda-banner-btns">
+        <button class="oda-btn primary" onclick="autoDetectODA()">&#128269; Auto-detect</button>
+        <button class="oda-btn" onclick="downloadODA()">&#9660; Download</button>
+        <button class="oda-btn" onclick="browseODAAndSave()">Browse…</button>
+      </div>
+    </div>
+
+    <div id="sidebar-footer">
+      <kbd>Ctrl+F</kbd> focus search &nbsp;·&nbsp;
+      <kbd>Enter</kbd> open folder<br>
+      <kbd>F5</kbd> rescan &nbsp;·&nbsp;
+      Right-click for more options
+    </div>
+  </div>
+
+  <!-- ─── MAIN CONTENT ──────────────────────────────────────── -->
+  <div id="main">
+
+    <!-- Results Header -->
+    <div id="results-header">
+      <span id="results-count"><strong>0</strong> results</span>
+      <div id="results-header-spacer"></div>
+      <span class="sort-label">Sort by</span>
+      <select id="sort-select" onchange="sortResults()">
+        <option value="score">Match Score</option>
+        <option value="block_name">Block Name</option>
+        <option value="filename">File Name</option>
+        <option value="select_count">Most Used</option>
+      </select>
+    </div>
+
+    <!-- Table -->
+    <div id="table-wrap">
+      <div id="empty-state">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        <h3 id="empty-title">No blocks indexed yet</h3>
+        <p id="empty-msg">Add a DesignCenter folder path on the left, then click <strong>▶ Index Paths</strong> to scan your DWG files.</p>
+      </div>
+
+      <table id="results-table" style="display:none; table-layout:fixed;">
+        <thead>
+          <tr>
+            <th class="col-score" onclick="toggleSort('score')">Score <span class="sort-arrow">↓</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+            <th class="col-name"  onclick="toggleSort('block_name')">Block Name <span class="sort-arrow">↕</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+            <th class="col-file"  onclick="toggleSort('filename')">File <span class="sort-arrow">↕</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+            <th class="col-folder" onclick="toggleSort('folder')">Folder <span class="sort-arrow">↕</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+            <th class="col-path">Full Path<div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+            <th class="col-acts"></th>
+          </tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══ STATUS BAR ══════════════════════════════════════════════ -->
+<div id="statusbar" class="idle">
+  <div class="sb-dot"></div>
+  <span id="sb-text">Ready</span>
+  <span id="sb-right"></span>
+</div>
+
+<!-- ═══ CONTEXT MENU ═══════════════════════════════════════════ -->
+<div id="ctx-menu">
+  <div class="ctx-item" onclick="ctxAction('open_file')">
+    <span class="ctx-icon">📄</span> Open DWG File
+  </div>
+  <div class="ctx-item" onclick="ctxAction('open_folder')">
+    <span class="ctx-icon">📁</span> Open Containing Folder
+  </div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxAction('preview')">
+    <span class="ctx-icon">👁</span> Preview Block
+  </div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="ctxAction('copy_path')">
+    <span class="ctx-icon">📋</span> Copy Full Path
+  </div>
+  <div class="ctx-item" onclick="ctxAction('copy_name')">
+    <span class="ctx-icon">🔤</span> Copy Block Name
+  </div>
+</div>
+
+<!-- ═══ SETTINGS PANEL ═════════════════════════════════════════ -->
+<div id="settings-overlay" onclick="closeSettings()"></div>
+<div id="settings-panel">
+  <div class="settings-header">
+    <h2>⚙ Settings</h2>
+    <button class="settings-close" onclick="closeSettings()">×</button>
+  </div>
+  <div class="settings-body">
+
+    <div class="settings-group">
+      <label>ODA File Converter Path</label>
+      <div class="settings-row">
+        <input id="s-oda-path" class="settings-input" type="text"
+               placeholder="vendor/ODAFileConverter/ODAFileConverter.exe"/>
+        <button class="icon-btn" title="Auto-detect" onclick="autoDetectODA()">🔍</button>
+        <button class="icon-btn" title="Browse" onclick="browseODAAndSave()">📁</button>
+      </div>
+      <p class="settings-hint">
+        Required for .dwg files. Download free from
+        opendesign.com/guestfiles/oda_file_converter
+        or run <code>python setup_oda.py</code>
+      </p>
+    </div>
+
+    <div class="settings-group">
+      <label>Fuzzy Match Threshold</label>
+      <div class="settings-row">
+        <input id="s-threshold" class="settings-input" type="number"
+               min="30" max="100" value="60" style="width:80px"/>
+        <span style="color:var(--text2); font-size:12px">/ 100 — lower = more results</span>
+      </div>
+    </div>
+
+    <div class="settings-group">
+      <label>Scan File Extensions</label>
+      <input id="s-extensions" class="settings-input" type="text"
+             placeholder=".dwg, .dwt"/>
+      <p class="settings-hint">Comma-separated. Default: .dwg, .dwt</p>
+    </div>
+
+    <div class="settings-group">
+      <label>Max Results Per Search</label>
+      <input id="s-maxresults" class="settings-input" type="number"
+             min="50" max="2000" value="200" style="width:100px"/>
+    </div>
+
+    <button class="settings-save" onclick="saveSettings()">Save Settings</button>
+  </div>
+</div>
+
+<!-- ═══ TOAST ══════════════════════════════════════════════════ -->
+<div id="toast"></div>
+
+<!-- ═══ qwebchannel.js (injected by Qt) ════════════════════════ -->
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   Application State
+══════════════════════════════════════════════════════════════ */
+let backend   = null;
+let allResults    = [];
+let filteredResults = [];
+let scanPaths = [];
+let currentCategory = 'all';
+let searchDebounce  = null;
+let sortKey         = 'score';
+let sortAsc         = false;
+let ctxRecord       = null;
+
+/* ══════════════════════════════════════════════════════════════
+   QWebChannel Handshake
+══════════════════════════════════════════════════════════════ */
+new QWebChannel(qt.webChannelTransport, function(channel) {
+  backend = channel.objects.backend;
+
+  // Wire up Python→JS signals
+  backend.indexingProgress.connect(onIndexingProgress);
+  backend.indexingFinished.connect(onIndexingFinished);
+  backend.statsChanged.connect(onStatsChanged);
+  backend.errorOccurred.connect(onError);
+
+  // Show connecting state immediately
+  setStatus('idle', 'Connected to backend — loading config…');
+
+  // Initial load
+  backend.getConfig(function(jsonStr) {
+    const cfg = JSON.parse(jsonStr);
+    scanPaths = cfg.scan_paths || [];
+    renderPathList();
+    document.getElementById('s-oda-path').value   = cfg.oda_converter_path || '';
+    document.getElementById('s-threshold').value  = cfg.fuzzy_threshold || 60;
+    document.getElementById('s-maxresults').value = cfg.max_results || 200;
+    const exts = (cfg.scan_extensions || ['.dwg', '.dwt']).join(', ');
+    document.getElementById('s-extensions').value = exts;
+  });
+
+  backend.getStats(function(jsonStr) { onStatsChanged(jsonStr); });
+});
+
+/* ══════════════════════════════════════════════════════════════
+   Path Management
+══════════════════════════════════════════════════════════════ */
+function addPath() {
+  const inp = document.getElementById('path-input');
+  const val = inp.value.trim();
+  if (!val || scanPaths.includes(val)) { inp.value = ''; return; }
+  scanPaths.push(val);
+  inp.value = '';
+  renderPathList();
+  persistPaths();
+}
+
+function browseAndAdd() {
+  if (!backend) return;
+  const current = scanPaths[scanPaths.length - 1] || '';
+  backend.browseFolder(current, function(path) {
+    if (path && !scanPaths.includes(path)) {
+      scanPaths.push(path);
+      renderPathList();
+      persistPaths();
+    }
+  });
+}
+
+function removePath(idx) {
+  scanPaths.splice(idx, 1);
+  renderPathList();
+  persistPaths();
+}
+
+function renderPathList() {
+  const container = document.getElementById('path-list');
+  if (scanPaths.length === 0) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--text3);padding:4px 2px">No paths added yet</div>';
+    return;
+  }
+  container.innerHTML = scanPaths.map((p, i) => `
+    <div class="path-chip" title="${esc(p)}">
+      <span>📂 ${esc(basename(p))}</span>
+      <button class="chip-del" onclick="removePath(${i})" title="Remove">×</button>
+    </div>`).join('');
+}
+
+function persistPaths() {
+  if (!backend) return;
+  backend.saveConfig(JSON.stringify({ scan_paths: scanPaths }));
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Status helpers — drive ALL indicators from one place
+══════════════════════════════════════════════════════════════ */
+function setStatus(state, mainText, fileText, pct) {
+  // ── bottom status bar ──────────────────────────────────────
+  const sb = document.getElementById('statusbar');
+  sb.className = state;
+  document.getElementById('sb-text').textContent  = mainText || '';
+  document.getElementById('sb-right').textContent = (pct != null && pct >= 0) ? pct + '%' : '';
+
+  // ── sidebar progress bar + labels ─────────────────────────
+  const fill    = document.getElementById('progress-bar-fill');
+  const statEl  = document.getElementById('progress-status');
+  const pctEl   = document.getElementById('progress-pct');
+  const fileEl  = document.getElementById('progress-file');
+
+  statEl.textContent = mainText || '';
+
+  if (state === 'scanning') {
+    document.getElementById('topbar-spinner').style.display = 'block';
+    if (pct != null && pct >= 0) {
+      fill.className   = '';
+      fill.style.width = pct + '%';
+      pctEl.textContent   = pct + '%';
+      pctEl.style.display = 'inline';
+    } else {
+      fill.className   = 'indeterminate';
+      fill.style.width = '';
+      pctEl.style.display = 'none';
+    }
+    if (fileText) {
+      fileEl.textContent   = fileText;
+      fileEl.style.display = 'block';
+    }
+  } else {
+    document.getElementById('topbar-spinner').style.display = 'none';
+    pctEl.style.display  = 'none';
+    fileEl.style.display = 'none';
+    fill.className = '';
+    fill.style.width = (state === 'done') ? '100%' : '0%';
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Indexing
+══════════════════════════════════════════════════════════════ */
+let isIndexing = false;
+
+function startScan() {
+  if (!backend) return;
+  if (isIndexing) {
+    const btn = document.getElementById('btn-scan');
+    btn.textContent = 'Stopping…';
+    btn.disabled = true;
+    setStatus('scanning', 'Cancelling — waiting for current file to finish…');
+    backend.cancelIndexing(function() {});
+    return;
+  }
+  if (scanPaths.length === 0) {
+    showToast('Add at least one folder path first', 'error');
+    setStatus('warn', 'No paths configured — add a folder on the left first');
+    return;
+  }
+  isIndexing = true;
+  const btn = document.getElementById('btn-scan');
+  btn.textContent = '⏹ Stop';
+  btn.disabled = false;
+  setStatus('scanning', 'Starting indexer…');
+  backend.startIndexing(function() {});
+}
+
+function onIndexingProgress(current, total, msg) {
+  let mainText, fileText, pct;
+
+  if (current >= 0 && total > 0) {
+    pct      = Math.round(100 * current / total);
+    mainText = `Indexing files: ${current} / ${total}`;
+    // msg from Python is the current filename like "[5/120] drawing.dwg"
+    fileText = msg || '';
+  } else if (msg) {
+    mainText = msg;
+    pct      = -1;
+  } else {
+    mainText = 'Scanning…';
+    pct      = -1;
+  }
+  setStatus('scanning', mainText, fileText, pct >= 0 ? pct : null);
+}
+
+function onIndexingFinished(msg) {
+  isIndexing = false;
+  const btn = document.getElementById('btn-scan');
+  btn.textContent = '▶ Index Paths';
+  btn.disabled = false;
+  setStatus('done', msg);
+  showToast(msg, 'success');
+  backend.getStats(function(js) { onStatsChanged(js); });
+  // Fade back to idle after 6 s
+  setTimeout(() => {
+    if (!isIndexing) setStatus('idle', 'Ready — type a block name to search');
+  }, 6000);
+}
+
+function onError(msg) {
+  isIndexing = false;
+  const btn = document.getElementById('btn-scan');
+  btn.textContent = '▶ Index Paths';
+  btn.disabled = false;
+  setStatus('error', '⚠ ' + msg);
+  showToast(msg, 'error');
+}
+
+function clearCache() {
+  if (!confirm('Clear all indexed data?')) return;
+  backend.saveConfig(JSON.stringify({ _clear_cache: true }));
+  // The backend handles _clear_cache via saveConfig → we need a dedicated slot
+  // For now: show guidance
+  showToast('Use ▶ Index Paths to rebuild after clearing from Settings', '');
+}
+
+function downloadODA() {
+  if (!backend) return;
+  showToast('Starting ODA setup — this may take a moment…', '');
+  setStatus('scanning', 'Downloading ODA File Converter…');
+  backend.setupODA(function() {
+    // Poll stats after a delay to let setup_oda.py do its work
+    setTimeout(() => backend.getStats(function(js) {
+      onStatsChanged(js);
+      const s = JSON.parse(js);
+      if (s.oda_ok) {
+        showToast('ODA Converter installed successfully', 'success');
+        setStatus('done', 'ODA Converter ready — you can now index DWG files');
+      } else {
+        showToast('ODA setup launched — check the terminal if it takes long', '');
+        setStatus('idle', 'ODA setup running in background…');
+      }
+    }), 8000);
+  });
+}
+
+function autoDetectODA() {
+  if (!backend) return;
+  showToast('Scanning for ODA Converter…', '');
+  backend.detectODA(function(path) {
+    if (path) {
+      document.getElementById('s-oda-path').value = path;
+      backend.getStats(function(js) { onStatsChanged(js); });
+      showToast('ODA Converter found: ' + path.split('\\').pop(), 'success');
+    } else {
+      showToast('ODA Converter not found automatically. Try Browse… or Download.', 'error');
+    }
+  });
+}
+
+function browseODAAndSave() {
+  if (!backend) return;
+  backend.browseODA(function(path) {
+    if (!path) return;
+    document.getElementById('s-oda-path').value = path;
+    backend.saveConfig(JSON.stringify({ oda_converter_path: path }), function() {
+      backend.getStats(function(js) { onStatsChanged(js); });
+      showToast('ODA path saved', 'success');
+    });
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Stats
+══════════════════════════════════════════════════════════════ */
+function onStatsChanged(jsonStr) {
+  const s = JSON.parse(jsonStr);
+  const statsEl = document.getElementById('topbar-stats');
+  if (s.file_count === 0) {
+    statsEl.textContent = 'Not indexed';
+  } else {
+    statsEl.textContent = `${fmt(s.file_count)} files · ${fmt(s.block_count)} blocks`;
+  }
+  // ODA indicator
+  const banner = document.getElementById('oda-banner');
+  const bannerTitle = document.getElementById('oda-banner-title');
+  const bannerMsg   = document.getElementById('oda-banner-msg');
+  const bannerBtns  = document.getElementById('oda-banner-btns');
+  if (s.oda_ok) {
+    banner.className = 'ok';
+    bannerTitle.textContent = 'ODA Converter: ready';
+    bannerMsg.textContent   = 'DWG files will be converted and indexed.';
+    bannerBtns.style.display = 'none';
+  } else {
+    banner.className = 'warn';
+    bannerTitle.textContent = 'ODA Converter not found';
+    bannerMsg.textContent   = 'DWG files cannot be indexed without it.';
+    bannerBtns.style.display = 'flex';
+  }
+  // Update paths if changed externally
+  if (s.scan_paths && s.scan_paths.length !== scanPaths.length) {
+    scanPaths = s.scan_paths;
+    renderPathList();
+  }
+  // Update idle status bar with useful summary
+  if (!isIndexing) {
+    if (s.file_count > 0) {
+      setStatus('idle', `Ready — ${fmt(s.file_count)} files · ${fmt(s.block_count)} blocks indexed`);
+    } else if (scanPaths.length > 0) {
+      setStatus('warn', 'Not indexed yet — click ▶ Index Paths to scan');
+    } else {
+      setStatus('idle', 'Add a DesignCenter folder path, then click ▶ Index Paths');
+    }
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Search
+══════════════════════════════════════════════════════════════ */
+function setCategory(btn) {
+  document.querySelectorAll('.cat-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentCategory = btn.dataset.cat;
+  triggerSearch();
+}
+
+function onSearchInput() {
+  const val = document.getElementById('search-input').value;
+  document.getElementById('clear-btn').classList.toggle('visible', val.length > 0);
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(triggerSearch, 300);
+}
+
+function onSearchKeyDown(e) {
+  if (e.key === 'Enter') { clearTimeout(searchDebounce); triggerSearch(); }
+  if (e.key === 'Escape') clearSearch();
+  if (e.key === 'ArrowDown') { e.preventDefault(); selectRow(1); }
+  if (e.key === 'ArrowUp')   { e.preventDefault(); selectRow(-1); }
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('clear-btn').classList.remove('visible');
+  clearTimeout(searchDebounce);
+  allResults = [];
+  filteredResults = [];
+  renderResults([]);
+}
+
+function triggerSearch() {
+  const query = document.getElementById('search-input').value.trim();
+  if (!query || !backend) {
+    if (!query) { clearSearch(); }
+    return;
+  }
+  const pathFilter = scanPaths.length === 1 ? scanPaths[0] : '';
+  document.getElementById('topbar-spinner').style.display = 'block';
+  backend.search(query, currentCategory, pathFilter, function(jsonStr) {
+    document.getElementById('topbar-spinner').style.display = 'none';
+    try {
+      const data = JSON.parse(jsonStr);
+      if (data.error) {
+        setStatus('error', '⚠ Search error: ' + data.error);
+        showToast(data.error, 'error');
+        return;
+      }
+      allResults = data;
+      applySort();
+      if (!isIndexing) {
+        setStatus('idle', `Found ${data.length} result${data.length !== 1 ? 's' : ''} for "${query}"`);
+      }
+    } catch(e) {
+      document.getElementById('topbar-spinner').style.display = 'none';
+      showToast('Search error: ' + e, 'error');
+    }
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Sort + Render
+══════════════════════════════════════════════════════════════ */
+function toggleSort(key) {
+  if (sortKey === key) sortAsc = !sortAsc;
+  else { sortKey = key; sortAsc = key !== 'score'; }
+  applySort();
+  // update header arrows
+  document.querySelectorAll('thead th .sort-arrow').forEach(el => { el.textContent = '↕'; });
+  document.querySelectorAll('thead th').forEach(th => th.classList.remove('sorted'));
+  const idx = ['score','block_name','filename','folder'].indexOf(key);
+  if (idx >= 0) {
+    const ths = document.querySelectorAll('thead th');
+    ths[idx].classList.add('sorted');
+    ths[idx].querySelector('.sort-arrow').textContent = sortAsc ? '↑' : '↓';
+  }
+  document.getElementById('sort-select').value = key === 'folder' ? 'score' : key;
+}
+
+function sortResults() {
+  sortKey = document.getElementById('sort-select').value;
+  sortAsc = sortKey !== 'score';
+  applySort();
+}
+
+function applySort() {
+  const data = [...allResults];
+  data.sort((a, b) => {
+    let av = a[sortKey], bv = b[sortKey];
+    if (typeof av === 'string') av = av.toLowerCase(), bv = (bv||'').toLowerCase();
+    if (av < bv) return sortAsc ? -1 :  1;
+    if (av > bv) return sortAsc ?  1 : -1;
+    return 0;
+  });
+  filteredResults = data;
+  renderResults(filteredResults);
+}
+
+const QUERY_HIGHLIGHT = () => document.getElementById('search-input').value.trim().toLowerCase();
+
+function renderResults(results) {
+  const tbody       = document.getElementById('results-body');
+  const table       = document.getElementById('results-table');
+  const emptyState  = document.getElementById('empty-state');
+  const countEl     = document.getElementById('results-count');
+  const query       = QUERY_HIGHLIGHT();
+
+  countEl.innerHTML = `<strong>${results.length}</strong> result${results.length !== 1 ? 's' : ''}`;
+
+  if (results.length === 0) {
+    table.style.display = 'none';
+    emptyState.style.display = 'flex';
+    if (query) {
+      document.getElementById('empty-title').textContent = 'No results found';
+      document.getElementById('empty-msg').textContent =
+        `No blocks matched "${query}". Try a different term, check spelling, or use a broader category.`;
+    } else {
+      document.getElementById('empty-title').textContent = 'No blocks indexed yet';
+      document.getElementById('empty-msg').innerHTML =
+        'Add a DesignCenter folder path on the left, then click <strong>▶ Index Paths</strong> to scan your DWG files.';
+    }
+    return;
+  }
+
+  emptyState.style.display = 'none';
+  table.style.display = 'table';
+
+  tbody.innerHTML = results.slice(0, 500).map((r, i) => {
+    const scoreClass = r.score >= 80 ? 'score-high' : r.score >= 50 ? 'score-med' : 'score-low';
+    const tags = (r.attribute_tags || []).slice(0, 4).join(', ');
+    const hn = hlText(r.block_name, query);
+    const hf = hlText(r.filename, query);
+    const folderBase = basename(r.folder || '');
+    return `<tr data-idx="${i}" oncontextmenu="showCtxMenu(event,${i})"
+                onclick="selectRowEl(this,${i})"
+                ondblclick="openFolder(${i})">
+      <td class="col-score"><span class="score-badge ${scoreClass}">${Math.round(r.score)}</span></td>
+      <td class="col-name" title="${esc(r.block_name)}">
+        <div class="name-cell">${hn}${tags ? `<span class="attr-tags">🏷 ${esc(tags)}</span>` : ''}</div>
+      </td>
+      <td class="col-file"  title="${esc(r.filename)}"><span class="file-cell">${hf}</span></td>
+      <td class="col-folder" title="${esc(r.folder)}">${esc(folderBase)}</td>
+      <td class="col-path"  title="${esc(r.file_path)}">${esc(r.file_path)}</td>
+      <td class="col-acts">
+        <div class="row-actions">
+          <button class="row-btn" title="Open folder" onclick="event.stopPropagation(); openFolder(${i})">📁</button>
+          <button class="row-btn" title="Copy path"   onclick="event.stopPropagation(); copyPath(${i})">📋</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function hlText(text, query) {
+  if (!text || !query) return esc(text || '');
+  const safe = esc(text);
+  const re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return safe.replace(re, '<span class="hl">$1</span>');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Row Selection & Actions
+══════════════════════════════════════════════════════════════ */
+let selectedIdx = -1;
+
+function selectRowEl(el, idx) {
+  document.querySelectorAll('tbody tr.selected').forEach(r => r.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedIdx = idx;
+  if (backend && filteredResults[idx]) {
+    backend.recordSelection(filteredResults[idx].id);
+  }
+}
+
+function selectRow(delta) {
+  const rows = document.querySelectorAll('tbody tr');
+  if (!rows.length) return;
+  let next = Math.max(0, Math.min(rows.length - 1, selectedIdx + delta));
+  selectRowEl(rows[next], next);
+  rows[next].scrollIntoView({ block: 'nearest' });
+}
+
+function openFolder(idx) {
+  const r = filteredResults[idx];
+  if (!r || !backend) return;
+  backend.openFolder(r.file_path || r.folder);
+}
+
+function copyPath(idx) {
+  const r = filteredResults[idx];
+  if (!r || !backend) return;
+  backend.copyToClipboard(r.file_path);
+  showToast('Path copied to clipboard', 'success');
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Context Menu
+══════════════════════════════════════════════════════════════ */
+function showCtxMenu(e, idx) {
+  e.preventDefault();
+  ctxRecord = filteredResults[idx];
+  const menu = document.getElementById('ctx-menu');
+  menu.style.left = e.clientX + 'px';
+  menu.style.top  = e.clientY + 'px';
+  menu.classList.add('open');
+  selectRowEl(e.currentTarget, idx);
+}
+
+function ctxAction(action) {
+  const menu = document.getElementById('ctx-menu');
+  menu.classList.remove('open');
+  if (!ctxRecord || !backend) return;
+  const r = ctxRecord;
+  if (action === 'open_file')   backend.openFile(r.file_path);
+  if (action === 'open_folder') backend.openFolder(r.folder);
+  if (action === 'copy_path')   { backend.copyToClipboard(r.file_path); showToast('Path copied', 'success'); }
+  if (action === 'copy_name')   { backend.copyToClipboard(r.block_name); showToast('Block name copied', 'success'); }
+  if (action === 'preview')     backend.openFile(r.file_path); // fallback to open file
+}
+
+document.addEventListener('click', () => {
+  document.getElementById('ctx-menu').classList.remove('open');
+});
+
+/* ══════════════════════════════════════════════════════════════
+   Settings Panel
+══════════════════════════════════════════════════════════════ */
+function toggleSettings() {
+  document.getElementById('settings-overlay').classList.toggle('open');
+  document.getElementById('settings-panel').classList.toggle('open');
+}
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('open');
+  document.getElementById('settings-panel').classList.remove('open');
+}
+
+function browseODA() {
+  if (!backend) return;
+  backend.browseODA(function(path) {
+    if (path) document.getElementById('s-oda-path').value = path;
+  });
+}
+
+function saveSettings() {
+  if (!backend) return;
+  const exts = document.getElementById('s-extensions').value
+    .split(',').map(s => s.trim()).filter(Boolean);
+  const cfg = {
+    oda_converter_path: document.getElementById('s-oda-path').value.trim(),
+    fuzzy_threshold:    parseInt(document.getElementById('s-threshold').value, 10),
+    max_results:        parseInt(document.getElementById('s-maxresults').value, 10),
+    scan_extensions:    exts.length ? exts : ['.dwg', '.dwt'],
+  };
+  backend.saveConfig(JSON.stringify(cfg));
+  showToast('Settings saved', 'success');
+  closeSettings();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Toast
+══════════════════════════════════════════════════════════════ */
+let toastTimer = null;
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + (type || '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = ''; }, 3500);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Keyboard shortcuts
+══════════════════════════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault();
+    document.getElementById('search-input').focus();
+    document.getElementById('search-input').select();
+  }
+  if (e.key === 'F5') startScan();
+  if (e.key === 'Enter' && selectedIdx >= 0 && document.activeElement.tagName !== 'INPUT') {
+    openFolder(selectedIdx);
+  }
+  if (e.key === 'Escape') {
+    closeSettings();
+    document.getElementById('ctx-menu').classList.remove('open');
+  }
+  if (e.key === 'ArrowDown') selectRow(1);
+  if (e.key === 'ArrowUp')   selectRow(-1);
+});
+
+/* ══════════════════════════════════════════════════════════════
+   Utils
+══════════════════════════════════════════════════════════════ */
+function esc(s) {
+  if (!s) return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function basename(p) {
+  if (!p) return '';
+  return p.replace(/\\/g, '/').split('/').filter(Boolean).pop() || p;
+}
+function fmt(n) {
+  return n.toLocaleString();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Column resize
+══════════════════════════════════════════════════════════════ */
+(function initColResize() {
+  let _th = null, _startX = 0, _startW = 0, _handle = null;
+
+  document.addEventListener('mousedown', function(e) {
+    if (!e.target.classList.contains('col-resizer')) return;
+    e.preventDefault();
+    _handle = e.target;
+    _th = _handle.parentElement;
+    _startX = e.clientX;
+    _startW = _th.offsetWidth;
+    _handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', function(e) {
+    if (!_th) return;
+    const delta = e.clientX - _startX;
+    const minW = parseInt(getComputedStyle(_th).minWidth) || 40;
+    _th.style.width = Math.max(minW, _startW + delta) + 'px';
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (!_th) return;
+    _handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    _th = null; _handle = null;
+  });
+})();
+</script>
+</body>
+</html>

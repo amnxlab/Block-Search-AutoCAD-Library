@@ -1,0 +1,15 @@
+{
+  "oda_converter_path": "",
+  "db_path": "",
+  "scan_paths": [],
+  "scan_extensions": [".dwg", ".dwt"],
+  "skip_anonymous_blocks": true,
+  "fuzzy_threshold": 60,
+  "max_results": 200,
+  "debounce_ms": 300,
+  "theme": "dark",
+  "log_level": "INFO",
+  "log_file": "",
+  "temp_dir": "",
+  "preview_prefer_acad": true
+}
