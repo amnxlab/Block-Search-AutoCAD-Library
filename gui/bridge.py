@@ -8,6 +8,7 @@ JS usage (after QWebChannel handshake):
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -122,7 +123,9 @@ class Backend(QObject):
             "scan_paths":        self._config.get("scan_paths", []),
             "oda_converter_path": self._config.get("oda_converter_path", ""),
             "fuzzy_threshold":   self._config.get("fuzzy_threshold", 60),
+            "ui_text_scale":     self._config.get("ui_text_scale", 1.0),
             "scan_extensions":   self._config.get("scan_extensions", [".dwg", ".dwt"]),
+            "max_results":       self._config.get("max_results", 200),
         })
 
     @Slot(str)
@@ -158,6 +161,38 @@ class Backend(QObject):
         self._poll_timer.start()
 
         self._indexer.start()
+
+    @Slot()
+    def forceReindexing(self) -> None:
+        """Clear indexed data and preview cache, then start a full reindex."""
+        if self._indexer and self._indexer.isRunning():
+            self.errorOccurred.emit("Cannot force reindex while indexing is running. Stop indexing first.")
+            return
+
+        try:
+            self.indexingLogLine.emit("Force indexing: clearing old index data...", "log-status")
+            self._db.clear_all()
+            try:
+                self._db.vacuum()
+            except Exception:
+                pass
+
+            base = Path(self._config.get("_base_dir", "."))
+            preview_dir = base / "data" / "previews"
+            legacy_cache = base / "temp" / "oda_work" / "preview_cache"
+
+            if preview_dir.exists():
+                shutil.rmtree(preview_dir, ignore_errors=True)
+            if legacy_cache.exists():
+                shutil.rmtree(legacy_cache, ignore_errors=True)
+
+            self.statsChanged.emit(self._stats_json())
+            self.indexingLogLine.emit("Force indexing: old index removed.", "log-status")
+        except Exception as exc:
+            self.errorOccurred.emit(f"Failed to clear old index data: {exc}")
+            return
+
+        self.startIndexing()
 
     @Slot()
     def cancelIndexing(self) -> None:

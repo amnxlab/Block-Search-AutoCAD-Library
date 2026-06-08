@@ -251,12 +251,17 @@ def main() -> None:
     app.setApplicationDisplayName("Block Search — AutoCAD Library")
     app.setOrganizationName("BlockSearch")
 
-    # Base font
-    font = QFont("Segoe UI", 9)
+    # Load config first so app-level text scale can be applied at startup.
+    config = load_config()
+
+    # Base font (scaled from persisted UI text scale)
+    text_scale = float(config.get("ui_text_scale", 1.0) or 1.0)
+    text_scale = max(0.8, min(2.0, text_scale))
+    base_point_size = max(7, min(18, int(round(9 * text_scale))))
+    font = QFont("Segoe UI", base_point_size)
     app.setFont(font)
 
-    # Load config & logger
-    config = load_config()
+    # Logger
     setup_logger(config)
 
     # Ensure ODA File Converter is present before opening the main window

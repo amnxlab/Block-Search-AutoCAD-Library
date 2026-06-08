@@ -13,5 +13,6 @@
   "temp_dir": "",
   "preview_prefer_acad": true,
   "preview_export_on_index": true,
-  "preview_image_size": 700
+  "preview_image_size": 700,
+  "ui_text_scale": 1.0
 }

@@ -29,7 +29,7 @@ from core.preview_exporter import build_preview_relative_path, render_preview_fr
 log = logging.getLogger(__name__)
 
 # Increment this when parser/render extraction behavior changes and files must be re-parsed.
-INDEXER_PARSER_REV = 2
+INDEXER_PARSER_REV = 3
 
 
 class IndexerWorker(QThread):

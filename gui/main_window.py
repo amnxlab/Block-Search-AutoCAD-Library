@@ -43,6 +43,8 @@ class MainWindow(QMainWindow):
 
         # ── QWebEngineView ────────────────────────────────────────────
         self._view = QWebEngineView(self)
+        scale = float(self._config.get("ui_text_scale", 1.0) or 1.0)
+        self._view.setZoomFactor(max(0.8, min(2.0, scale)))
         channel = QWebChannel(self)
         channel.registerObject("backend", self._backend)
         self._view.page().setWebChannel(channel)

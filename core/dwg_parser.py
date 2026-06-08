@@ -440,6 +440,8 @@ def _extract_geometry(blk: Any) -> tuple[List[Dict[str, Any]], Dict[str, float]]
     except Exception:
         pass
 
+    entities = _deduplicate_entities(entities)
+
     if not entities:
         return [], {}
 
@@ -458,3 +460,69 @@ def _extract_geometry(blk: Any) -> tuple[List[Dict[str, Any]], Dict[str, float]]
         "max_x": float(max_x),
         "max_y": float(max_y),
     }
+
+
+def _deduplicate_entities(entities: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Remove near-identical entities produced by nested INSERT expansion."""
+    if not entities:
+        return entities
+
+    seen: set[str] = set()
+    out: List[Dict[str, Any]] = []
+
+    def q(value: Any, step: float = 1e-3) -> str:
+        try:
+            v = float(value)
+        except Exception:
+            v = 0.0
+        snapped = round(v / step) * step
+        return f"{snapped:.4f}"
+
+    def line_key(coords: List[List[float]]) -> str:
+        a = (q(coords[0][0]), q(coords[0][1]))
+        b = (q(coords[1][0]), q(coords[1][1]))
+        p1, p2 = (a, b) if a <= b else (b, a)
+        return f"L|{p1[0]},{p1[1]}|{p2[0]},{p2[1]}"
+
+    for ent in entities:
+        etype = str(ent.get("type", "")).upper()
+        key = ""
+
+        if etype == "LINE":
+            coords = ent.get("coords") or []
+            if len(coords) >= 2:
+                key = line_key(coords)
+
+        elif etype == "CIRCLE":
+            center = ent.get("center") or [0.0, 0.0]
+            key = f"C|{q(center[0])},{q(center[1])}|{q(ent.get('radius', 0.0))}"
+
+        elif etype == "ARC":
+            center = ent.get("center") or [0.0, 0.0]
+            key = (
+                f"A|{q(center[0])},{q(center[1])}|{q(ent.get('radius', 0.0))}|"
+                f"{q(ent.get('start_angle', 0.0), 1.0)}|{q(ent.get('end_angle', 0.0), 1.0)}"
+            )
+
+        elif etype == "POLYLINE":
+            coords = ent.get("coords") or []
+            closed = bool(ent.get("closed", False))
+            pts = ";".join(f"{q(p[0])},{q(p[1])}" for p in coords if isinstance(p, (list, tuple)) and len(p) >= 2)
+            key = f"P|{closed}|{pts}"
+
+        elif etype == "TEXT":
+            pos = ent.get("position") or [0.0, 0.0]
+            txt = " ".join(str(ent.get("text", "")).split()).strip().upper()
+            key = (
+                f"T|{q(pos[0], 5e-3)},{q(pos[1], 5e-3)}|{q(ent.get('height', 0.0), 1e-2)}|"
+                f"{q(ent.get('rotation', 0.0), 1.0)}|{txt}"
+            )
+
+        if key and key in seen:
+            continue
+
+        if key:
+            seen.add(key)
+        out.append(ent)
+
+    return out

@@ -1008,7 +1008,7 @@ tbody tr.selected .row-actions { opacity: 1; }
 
       <div class="scan-row">
         <button id="btn-scan" class="btn-primary" onclick="startScan()">▶ Index Paths</button>
-        <button class="btn-ghost" onclick="clearCache()" title="Clear index cache">🗑</button>
+        <button class="btn-ghost" onclick="forceReindex()" title="Force reindex: clear old index then run fresh">🗑</button>
       </div>
     </div>
 
@@ -1212,6 +1212,15 @@ tbody tr.selected .row-actions { opacity: 1; }
              min="50" max="2000" value="200" style="width:100px"/>
     </div>
 
+    <div class="settings-group">
+      <label>Text Size</label>
+      <div class="settings-row">
+        <input id="s-text-scale" class="settings-input" type="number"
+               min="80" max="200" value="100" style="width:80px"/>
+        <span style="color:var(--text2); font-size:12px">% (applies after restart)</span>
+      </div>
+    </div>
+
     <button class="settings-save" onclick="saveSettings()">Save Settings</button>
   </div>
 </div>
@@ -1278,6 +1287,8 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
     document.getElementById('s-oda-path').value   = cfg.oda_converter_path || '';
     document.getElementById('s-threshold').value  = cfg.fuzzy_threshold || 60;
     document.getElementById('s-maxresults').value = cfg.max_results || 200;
+    const scalePct = Math.round((cfg.ui_text_scale || 1.0) * 100);
+    document.getElementById('s-text-scale').value = Math.max(80, Math.min(200, scalePct));
     const exts = (cfg.scan_extensions || ['.dwg', '.dwt']).join(', ');
     document.getElementById('s-extensions').value = exts;
   });
@@ -1383,7 +1394,7 @@ function setStatus(state, mainText, fileText, pct) {
 let isIndexing = false;
 let doneChipTimer = null;
 
-function startScan() {
+function startScan(forceReindex = false) {
   if (!backend) return;
   const doneChip = document.getElementById('index-done-chip');
   if (doneChip) doneChip.style.display = 'none';
@@ -1408,13 +1419,17 @@ function startScan() {
   const btn = document.getElementById('btn-scan');
   btn.textContent = '⏹ Stop';
   btn.disabled = false;
-  setStatus('scanning', 'Starting indexer…');
+  setStatus('scanning', forceReindex ? 'Force reindex started…' : 'Starting indexer…');
   // Reset log panel
   const logEl = document.getElementById('index-log');
   const logWrap = document.getElementById('index-log-wrap');
   if (logEl) logEl.innerHTML = '';
   if (logWrap) { logWrap.style.display = 'block'; logWrap.scrollTop = 0; }
-  backend.startIndexing(function() {});
+  if (forceReindex) {
+    backend.forceReindexing(function() {});
+  } else {
+    backend.startIndexing(function() {});
+  }
 }
 
 function appendLogLine(text, cls) {
@@ -1499,12 +1514,10 @@ function onError(msg) {
   showToast(msg, 'error');
 }
 
-function clearCache() {
-  if (!confirm('Clear all indexed data?')) return;
-  backend.saveConfig(JSON.stringify({ _clear_cache: true }));
-  // The backend handles _clear_cache via saveConfig → we need a dedicated slot
-  // For now: show guidance
-  showToast('Use ▶ Index Paths to rebuild after clearing from Settings', '');
+function forceReindex() {
+  if (!backend) return;
+  if (!confirm('Force reindex? This will remove old indexed data and preview files, then start fresh indexing.')) return;
+  startScan(true);
 }
 
 function downloadODA() {
@@ -1853,14 +1866,18 @@ function saveSettings() {
   if (!backend) return;
   const exts = document.getElementById('s-extensions').value
     .split(',').map(s => s.trim()).filter(Boolean);
+  const textScalePct = parseInt(document.getElementById('s-text-scale').value, 10);
+  const clampedTextScalePct = Math.max(80, Math.min(200, Number.isFinite(textScalePct) ? textScalePct : 100));
   const cfg = {
     oda_converter_path: document.getElementById('s-oda-path').value.trim(),
     fuzzy_threshold:    parseInt(document.getElementById('s-threshold').value, 10),
     max_results:        parseInt(document.getElementById('s-maxresults').value, 10),
     scan_extensions:    exts.length ? exts : ['.dwg', '.dwt'],
+    ui_text_scale:      clampedTextScalePct / 100,
   };
+  document.getElementById('s-text-scale').value = clampedTextScalePct;
   backend.saveConfig(JSON.stringify(cfg));
-  showToast('Settings saved', 'success');
+  showToast('Settings saved. Text size updates after restart.', 'success');
   closeSettings();
 }
 
@@ -1944,29 +1961,26 @@ function loadGeometryForRecord(rec) {
   if (!backend || !rec || !rec.id) return;
   const reqId = ++viewportState.reqId;
   viewportState.activeBlockId = rec.id;
-  let previewApplied = false;
+  let vectorReady = false;
   document.getElementById('viewport-empty').style.display = 'none';
   document.getElementById('viewport-title').textContent = rec.block_name || 'Block View';
   document.getElementById('viewport-meta').textContent = 'Loading geometry...';
 
   // Request vector geometry immediately so we can paint quickly.
   backend.getBlockGeometry(rec.id, function(jsonStr) {
-    if (reqId !== viewportState.reqId || previewApplied) return;
+    if (reqId !== viewportState.reqId) return;
     let data = null;
     try {
       data = JSON.parse(jsonStr);
     } catch (_err) {
-      if (!previewApplied) {
-        setViewportEmpty('Failed to parse geometry payload.');
-      }
+      setViewportEmpty('Failed to parse geometry payload.');
       return;
     }
     if (!data || data.error) {
-      if (!previewApplied) {
-        setViewportEmpty((data && data.error) ? data.error : 'No geometry available for this block.');
-      }
+      setViewportEmpty((data && data.error) ? data.error : 'No geometry available for this block.');
       return;
     }
+    vectorReady = true;
     renderViewportGeometry(data);
     document.getElementById('viewport-meta').textContent = 'Vector preview';
   });
@@ -1982,15 +1996,17 @@ function loadGeometryForRecord(rec) {
     }
 
     if (preview && preview.image_path) {
-      previewApplied = true;
-      renderViewportImage(
-        preview.image_path,
-        rec.block_name || preview.block_name || 'Block View',
-        (preview.source === 'indexed') ? 'Indexed preview' : 'Raster preview'
-      );
+      // Keep vector as the primary interactive view. Use raster only if vector failed.
+      if (!vectorReady) {
+        renderViewportImage(
+          preview.image_path,
+          rec.block_name || preview.block_name || 'Block View',
+          (preview.source === 'indexed') ? 'Indexed preview' : 'Raster preview'
+        );
+      }
     } else {
       const meta = document.getElementById('viewport-meta');
-      if (meta) {
+      if (meta && !vectorReady) {
         meta.textContent = 'Vector fallback (no indexed PNG)';
       }
     }
@@ -2086,11 +2102,64 @@ function renderViewportGeometry(geom) {
   textLayer.setAttribute('stroke', 'none');
   textLayer.setAttribute('font-family', 'Segoe UI, Arial, sans-serif');
 
+  const modelSpan = Math.max(base.w, base.h);
+  const maxTextH = Math.max(0.38, modelSpan * 0.0042);
+  const minTextH = Math.max(0.20, modelSpan * 0.00032);
+  const geomTol = Math.max(0.01, modelSpan * 0.0006);
+  const textTol = Math.max(0.06, modelSpan * 0.0012);
+  let textCount = 0;
+  const seenGeometry = new Set();
+  const seenText = new Set();
+  let dedupSkipped = 0;
+
+  function q(n, tol = geomTol) {
+    const value = Number(n) || 0;
+    const snapped = Math.round(value / tol) * tol;
+    return snapped.toFixed(4);
+  }
+
+  function normalizeText(s) {
+    return String(s || '').replace(/\s+/g, ' ').trim().toUpperCase();
+  }
+
+  function makeLineKey(x1, y1, x2, y2) {
+    // Sort endpoints so reversed duplicates map to the same key.
+    const a = `${q(x1)},${q(y1)}`;
+    const b = `${q(x2)},${q(y2)}`;
+    return a < b ? `L|${a}|${b}` : `L|${b}|${a}`;
+  }
+
+  function addGeomKey(key) {
+    if (seenGeometry.has(key)) {
+      dedupSkipped += 1;
+      return false;
+    }
+    seenGeometry.add(key);
+    return true;
+  }
+
+  function splitCadText(raw, maxChars) {
+    const prepared = String(raw || '').replace(/\\P/g, '\n').replace(/\r/g, '\n');
+    const rows = prepared.split('\n').map((s) => s.trim()).filter(Boolean);
+    const out = [];
+    for (const row of rows) {
+      if (row.length <= maxChars) {
+        out.push(row);
+        continue;
+      }
+      for (let i = 0; i < row.length; i += maxChars) {
+        out.push(row.slice(i, i + maxChars));
+      }
+    }
+    return out;
+  }
+
   const toY = (y) => -Number(y);
   entities.slice(0, 6000).forEach((ent) => {
     const type = String(ent.type || '').toUpperCase();
     if (type === 'LINE' && Array.isArray(ent.coords) && ent.coords.length >= 2) {
       const [a, bpt] = ent.coords;
+      if (!addGeomKey(makeLineKey(a[0], toY(a[1]), bpt[0], toY(bpt[1])))) return;
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', String(a[0]));
       line.setAttribute('y1', String(toY(a[1])));
@@ -2100,14 +2169,22 @@ function renderViewportGeometry(geom) {
       return;
     }
     if (type === 'CIRCLE' && Array.isArray(ent.center)) {
+      const cx = Number(ent.center[0]);
+      const cy = toY(Number(ent.center[1]));
+      const cr = Number(ent.radius || 0);
+      if (!addGeomKey(`C|${q(cx)},${q(cy)}|${q(cr)}`)) return;
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', String(ent.center[0]));
-      circle.setAttribute('cy', String(toY(ent.center[1])));
-      circle.setAttribute('r', String(ent.radius || 0));
+      circle.setAttribute('cx', String(cx));
+      circle.setAttribute('cy', String(cy));
+      circle.setAttribute('r', String(cr));
       layer.appendChild(circle);
       return;
     }
     if (type === 'POLYLINE' && Array.isArray(ent.coords) && ent.coords.length >= 2) {
+      const polyKey = `P|${Boolean(ent.closed)}|` + ent.coords
+        .map((pt) => `${q(pt[0])},${q(toY(pt[1]))}`)
+        .join(';');
+      if (!addGeomKey(polyKey)) return;
       const poly = document.createElementNS('http://www.w3.org/2000/svg', ent.closed ? 'polygon' : 'polyline');
       const pts = ent.coords.map((pt) => `${pt[0]},${toY(pt[1])}`).join(' ');
       poly.setAttribute('points', pts);
@@ -2126,26 +2203,44 @@ function renderViewportGeometry(geom) {
       const y2 = toY(cy + r * Math.sin(ea));
       const delta = ((Number(ent.end_angle || 0) - Number(ent.start_angle || 0)) % 360 + 360) % 360;
       const largeArc = delta > 180 ? 1 : 0;
+      if (!addGeomKey(`A|${q(cx)},${q(toY(cy))}|${q(r)}|${q(Number(ent.start_angle || 0), 1.0)}|${q(Number(ent.end_angle || 0), 1.0)}`)) return;
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 0 ${x2} ${y2}`);
       layer.appendChild(path);
       return;
     }
     if (type === 'TEXT' && Array.isArray(ent.position)) {
+      if (textCount >= 180) return;
       const tx = Number(ent.position[0]);
       const ty = toY(Number(ent.position[1]));
-      const th = Number(ent.height || 2.5);
+      const rawHeight = Number(ent.height || 2.5);
+      const th = Math.max(minTextH, Math.min(maxTextH, rawHeight));
       const rot = Number(ent.rotation || 0);
-      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      t.setAttribute('x', String(tx));
-      t.setAttribute('y', String(ty));
-      t.setAttribute('font-size', String(Math.max(th, 0.8)));
-      t.setAttribute('dominant-baseline', 'hanging');
-      if (rot) {
-        t.setAttribute('transform', `rotate(${-rot} ${tx} ${ty})`);
-      }
-      t.textContent = String(ent.text || '');
-      textLayer.appendChild(t);
+      const text = String(ent.text || '').trim();
+      if (!text) return;
+      if (text.length > 80) return;
+
+      const maxChars = Math.max(8, Math.min(22, Math.floor(modelSpan / Math.max(th * 3.0, 1))));
+      const lines = splitCadText(text, maxChars).slice(0, 2);
+      lines.forEach((line, lineIdx) => {
+        const textKey = `T|${q(tx, textTol)},${q(ty + lineIdx * (th * 1.05), textTol)}|${q(th, minTextH)}|${q(rot, 1.0)}|${normalizeText(line)}`;
+        if (seenText.has(textKey)) {
+          dedupSkipped += 1;
+          return;
+        }
+        seenText.add(textKey);
+        const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        t.setAttribute('x', String(tx));
+        t.setAttribute('y', String(ty + lineIdx * (th * 1.05)));
+        t.setAttribute('font-size', String(th));
+        t.setAttribute('dominant-baseline', 'hanging');
+        if (rot) {
+          t.setAttribute('transform', `rotate(${-rot} ${tx} ${ty})`);
+        }
+        t.textContent = line;
+        textLayer.appendChild(t);
+      });
+      textCount += 1;
     }
   });
 
@@ -2155,7 +2250,9 @@ function renderViewportGeometry(geom) {
   viewportState.current = { ...base };
   applyViewportViewBox();
   title.textContent = geom.block_name || 'Block View';
-  meta.textContent = `${entities.length} entities (vector fallback)`;
+  meta.textContent = dedupSkipped > 0
+    ? `${entities.length} entities (vector, dedup ${dedupSkipped})`
+    : `${entities.length} entities (vector)`;
   empty.style.display = 'none';
 }
 
@@ -2164,6 +2261,13 @@ function applyViewportViewBox() {
   if (!svg || !viewportState.current) return;
   const v = viewportState.current;
   svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
+  updateViewportTextVisibility();
+}
+
+function updateViewportTextVisibility() {
+  const textLayer = document.getElementById('viewport-text');
+  if (!textLayer) return;
+  textLayer.style.display = 'inline';
 }
 
 function resetViewportView() {

@@ -177,6 +177,7 @@ Without ODA, DXF files are still indexed and searchable.
 | `debounce_ms` | `300` | Search input debounce delay |
 | `preview_export_on_index` | `true` | Export and persist previews during indexing |
 | `preview_image_size` | `700` | PNG size in pixels for indexed previews |
+| `ui_text_scale` | `1.0` | Global UI text scale multiplier (`0.8` to `2.0`) |
 | `theme` | `"dark"` | UI theme (`"dark"` only currently) |
 
 ---

@@ -23,6 +23,7 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     "preview_prefer_acad": True,
     "preview_export_on_index": True,
     "preview_image_size": 700,
+    "ui_text_scale": 1.0,
 }
 
 
@@ -58,12 +59,19 @@ def load_config() -> Dict[str, Any]:
     base = _get_base_dir()
     resources = _get_resources_dir()
     config_path = base / "config.json"
+    bundled_config_path = resources / "config.json"
 
     config = dict(_DEFAULT_CONFIG)
 
+    source_path: Path | None = None
     if config_path.exists():
+        source_path = config_path
+    elif bundled_config_path.exists():
+        source_path = bundled_config_path
+
+    if source_path is not None:
         try:
-            with open(config_path, "r", encoding="utf-8") as fh:
+            with open(source_path, "r", encoding="utf-8") as fh:
                 loaded = json.load(fh)
             config.update(loaded)
         except (json.JSONDecodeError, OSError):
