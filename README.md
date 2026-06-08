@@ -1,193 +1,240 @@
-# Block Search — AutoCAD Library
+# Block Search - AutoCAD Library
 
-A desktop search tool for AutoCAD block libraries. Index thousands of DWG/DXF files and search through every block record instantly with full-text search.
+<p align="center">
+  <img src="resources/icon.svg" alt="Block Search Logo" width="84" />
+</p>
 
-![Block Search UI](resources/ui/preview.png)
+<p align="center">
+  High-performance desktop search for AutoCAD block libraries (DWG/DXF) with fast indexing, fuzzy matching, and live preview.
+</p>
 
----
-
-## Features
-
-- **Full-text search** across all indexed block names using SQLite FTS5
-- **Fuzzy matching** via RapidFuzz for typo-tolerant results
-- **DWG + DXF support** — DXF files parsed directly with ezdxf; DWG files converted via ODA File Converter
-- **Fast incremental indexing** — background QThread scanner with progress feedback
-- **Persistent preview export during indexing** — previews are generated once and stored under `data/previews/`
-- **Zero runtime AutoCAD dependency for preview** — result selection reads indexed preview files (no on-demand COM rendering)
-- **Vector fallback preview** — if PNG preview is unavailable, geometry is rendered directly in the viewport
-- **Viewport zoom/pan** — mouse wheel zoom + drag pan for both vector and raster previews
-- **Dark UI** — PySide6 QWebEngineView SPA (VS Code-inspired theme)
-- **Resizable table columns** — drag column headers to resize
-- **Open in Explorer** — click 📁 to open the file's folder with the file selected
-- **Copy path** — click 📋 to copy the full file path to clipboard
-- **Context menu** — right-click any result for quick actions
-- **Configurable** — set scan paths, fuzzy threshold, max results, and more via the Settings panel
-- **ODA auto-detect** — automatically finds ODA File Converter in Program Files on startup
+<p align="center">
+  <img alt="Platform" src="https://img.shields.io/badge/Platform-Windows-0078D4?style=for-the-badge" />
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" />
+  <img alt="Qt" src="https://img.shields.io/badge/UI-PySide6-41CD52?style=for-the-badge&logo=qt&logoColor=white" />
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-black?style=for-the-badge" />
+</p>
 
 ---
 
-## Requirements
+## Why Block Search
 
-| Dependency | Version | Notes |
-|---|---|---|
-| Python | 3.10+ | Tested on 3.14 |
-| PySide6 | ≥ 6.6.0 | Qt 6 UI + WebEngine |
-| ezdxf | ≥ 1.3.0 | DXF parsing |
-| RapidFuzz | ≥ 3.6.0 | Fuzzy search |
-| pywin32 | ≥ 306 | Windows shell integration |
-| ODA File Converter | 27.x | Optional — required for DWG files only |
+Block Search is built for engineering and CAD teams that manage large drawing libraries and need instant discovery of reusable blocks.
 
-> **ODA File Converter** is a free tool from the Open Design Alliance.  
-> Download: https://www.opendesign.com/guestfiles/oda_file_converter
+It combines:
+- SQLite FTS5 full-text indexing for speed.
+- RapidFuzz ranking for typo-tolerant search.
+- ODA-assisted DWG parsing and conversion.
+- A desktop-first UI with side-by-side result list and preview.
 
 ---
 
-## Installation
+## UI Overview (Pic.png)
 
-### 1. Clone the repo
+![Block Search UI](Pic.png)
 
-```bash
+How the app works from left to right:
+
+1. Library and indexing panel
+- Add one or more DesignCenter folders.
+- Start indexing with `Index Paths`.
+- Track indexing health and ODA readiness status.
+
+2. Search and filters
+- Use instant search with category filters: `All`, `Block Name`, `Description`, `Keyword`, `Attribute Tag`, `Filename`, `Title Block`.
+- Adjust ranking through fuzzy threshold and max results settings.
+
+3. Results table
+- Score-ranked matches with file, folder, and full path columns.
+- Row actions for opening folder and copying paths.
+- Keyboard support (`Ctrl+F`, `Enter`, arrow navigation, `F5`).
+
+4. Preview viewport
+- Right-side visual preview of selected block.
+- Uses indexed preview images when available.
+- Falls back to vector geometry rendering when needed.
+
+---
+
+## Feature Set
+
+### Search and relevance
+- Full-text search (SQLite FTS5).
+- Fuzzy matching (RapidFuzz).
+- Category-scoped querying.
+- Result ranking by score and usage patterns.
+
+### Indexing pipeline
+- Batch scanning across multiple root folders.
+- DWG and DWT indexing support.
+- Progress reporting with status log.
+- Incremental behavior optimized for large libraries.
+- Force reindex option for clean rebuilds.
+
+### Preview and visualization
+- Preview generation during indexing and persisted cache (`data/previews`).
+- Runtime display without requiring AutoCAD.
+- Vector fallback for robust preview continuity.
+- Pan/zoom viewport interactions.
+
+### ODA integration
+- Auto-detect ODA File Converter from known install locations.
+- Manual path selection in settings.
+- Optional guided setup script support (`setup_oda.py`).
+- Graceful operation on DXF workflows if ODA is not installed.
+
+### UX and operations
+- Context menu actions (open file/folder, copy path/name, preview).
+- Toast notifications and status bar feedback.
+- Persistent app settings in `config.json`.
+- Production build path via PyInstaller (`build.cmd`, `build.spec`).
+
+---
+
+## Quick Start
+
+### 1) Clone and prepare environment
+
+```powershell
 git clone https://github.com/amnxlab/Block-Search-AutoCAD-Library.git
 cd Block-Search-AutoCAD-Library
-```
-
-### 2. Create a virtual environment
-
-```bash
 python -m venv .venv
 .venv\Scripts\activate
-```
-
-### 3. Install dependencies
-
-```bash
 pip install -r requirements.txt
 ```
 
-### 4. Configure
+### 2) Configure
 
-Copy the template config and edit it:
-
-```bash
+```powershell
 copy config.template.json config.json
 ```
 
-Edit `config.json`:
+Edit `config.json` minimally:
 
 ```json
 {
-  "scan_paths": ["C:/your/autocad/library"],
+  "scan_paths": ["R:/AutoDesk Vault/DesignCenter"],
   "oda_converter_path": "C:/Program Files/ODA/ODAFileConverter 27.1.0/ODAFileConverter.exe"
 }
 ```
 
-All other fields have sensible defaults.
+### 3) Run
 
-### 5. Run
-
-```bash
+```powershell
 python main.py
 ```
 
-On first launch, the app will:
-1. Auto-detect ODA File Converter if installed
-2. Create the SQLite database under `data/`
-3. Prompt you to add scan paths if none are configured
-
-> If you upgraded from an older version, run indexing once to backfill missing previews for already indexed blocks.
-
 ---
 
-## Preview Architecture (Important)
-
-- Previews are generated at indexing time and persisted on disk (`data/previews/`).
-- Runtime preview requests do not call AutoCAD.
-- If a preview image is missing, the app falls back to vector rendering from stored geometry.
-- Blocks that fail preview generation are marked and skipped on later indexing runs to keep reindexing fast.
-
----
-
-## Project Structure
-
-```
-Block-Search-AutoCAD-Library/
-├── core/
-│   ├── aliases.py          # Block name aliases / synonyms
-│   ├── database.py         # SQLite FTS5 schema + queries
-│   ├── dwg_parser.py       # DWG/DXF → block records (ezdxf + ODA)
-│   ├── indexer.py          # Background file scanner (QThread)
-│   ├── preview_exporter.py # Index-time geometry → PNG preview renderer
-│   └── search_engine.py    # FTS5 + fuzzy search
-├── gui/
-│   ├── bridge.py           # QWebChannel backend (JS ↔ Python)
-│   ├── main_window.py      # QWebEngineView host window
-│   └── ...
-├── resources/
-│   ├── ui/
-│   │   └── index.html      # Single-page app (HTML + CSS + JS)
-│   └── icon.svg            # App icon (AutoCAD Streamline)
-├── config.template.json    # Config template (copy to config.json)
-├── main.py                 # Entry point
-├── setup_oda.py            # ODA download helper
-├── make_ico.py             # SVG → ICO converter (build tool)
-├── build.cmd               # Build script
-├── build.spec              # PyInstaller spec
-└── requirements.txt
-```
-
----
-
-## Building a Standalone EXE
-
-Requires PyInstaller (included in `requirements.txt`).
-
-Use the project build command script:
+## Build for Production (Windows EXE)
 
 ```powershell
-build.cmd
+build.cmd --clean
 ```
 
-The `make_ico.py` script runs automatically during the build to generate `resources/icon.ico` from `resources/icon.svg`.
+Optional portable archive:
+
+```powershell
+build.cmd --clean --zip
+```
+
+Expected output:
+- `dist/BlockSearchTool.exe`
+
+Notes:
+- Build is configured as onefile in `build.spec`.
+- Resources, setup script, and vendor folders are bundled according to spec rules.
+
+---
+
+## Settings Reference
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `scan_paths` | array | `[]` | Root folders to scan |
+| `scan_extensions` | array | `[".dwg", ".dwt"]` | Extensions included in indexing |
+| `oda_converter_path` | string | `""` | Full path to `ODAFileConverter.exe` |
+| `db_path` | string | auto | SQLite index database location |
+| `fuzzy_threshold` | number | `60` | Fuzzy score cutoff (`0..100`) |
+| `max_results` | number | `200` | Max rows returned per query |
+| `debounce_ms` | number | `300` | Search debounce latency |
+| `skip_anonymous_blocks` | bool | `true` | Skip anonymous/system block records |
+| `preview_export_on_index` | bool | `true` | Export previews during indexing |
+| `preview_image_size` | number | `700` | Preview image size in pixels |
+| `ui_text_scale` | number | `1.0` | Global UI text scale (`0.8..2.0`) |
+| `theme` | string | `"dark"` | Current UI theme |
+
+---
+
+## Architecture Snapshot
+
+```text
+main.py
+  -> load config + bootstrap Qt app
+  -> create main window and web channel
+
+resources/ui/index.html
+  -> desktop SPA (controls, table, preview panel)
+  -> communicates with Python via QWebChannel
+
+gui/bridge.py
+  -> exposes backend slots to JS
+  -> orchestrates search, indexing, settings, OS actions
+
+core/indexer.py + core/dwg_parser.py
+  -> scan files and parse DWG/DXF blocks
+
+core/database.py + core/search_engine.py
+  -> FTS index + ranked search retrieval
+```
 
 ---
 
 ## ODA File Converter
 
-DWG support requires ODA File Converter installed separately (free):
-
-1. Download from https://www.opendesign.com/guestfiles/oda_file_converter
-2. Install it — the app will auto-detect it in `C:\Program Files\ODA\`
-3. Or set the path manually in **Settings → ODA Converter Path** within the app
-
-Without ODA, DXF files are still indexed and searchable.
+DWG workflows require ODA File Converter (free):
+- Download: https://www.opendesign.com/guestfiles/oda_file_converter
+- Configure path in Settings, or let the app auto-detect.
+- If unavailable, DXF indexing and search still work.
 
 ---
 
-## Configuration Reference
+## Troubleshooting
 
-| Key | Default | Description |
-|---|---|---|
-| `scan_paths` | `[]` | Folders to scan for DWG/DXF files |
-| `scan_extensions` | `[".dwg", ".dwt"]` | File extensions to index |
-| `oda_converter_path` | `""` | Full path to `ODAFileConverter.exe` |
-| `db_path` | `""` | SQLite database path (auto-set if empty) |
-| `skip_anonymous_blocks` | `true` | Skip `*Model_Space`, `*D0`, etc. |
-| `fuzzy_threshold` | `60` | Minimum fuzzy match score (0–100) |
-| `max_results` | `200` | Maximum search results to display |
-| `debounce_ms` | `300` | Search input debounce delay |
-| `preview_export_on_index` | `true` | Export and persist previews during indexing |
-| `preview_image_size` | `700` | PNG size in pixels for indexed previews |
-| `ui_text_scale` | `1.0` | Global UI text scale multiplier (`0.8` to `2.0`) |
-| `theme` | `"dark"` | UI theme (`"dark"` only currently) |
+### No DWG results
+- Confirm ODA is installed and path is valid.
+- Verify target folders are included in `scan_paths`.
+- Run `Index Paths` again after updating ODA settings.
+
+### Preview missing for a row
+- Reindex to regenerate preview assets.
+- Check `data/previews` exists and is writable.
+
+### Packaged app does not reflect config
+- Ensure `config.json` next to EXE has expected values.
+- Restart app after changing `ui_text_scale`.
+
+---
+
+## Roadmap Ideas
+
+- Saved search profiles.
+- Team-shared index service.
+- Additional visual themes.
+- Export selected result sets (CSV/JSON).
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT License.
 
 ---
 
-## Contributing
+## Acknowledgements
 
-Pull requests welcome. Please open an issue first for major changes.
+- Open Design Alliance (ODA File Converter)
+- Qt / PySide6
+- ezdxf
+- RapidFuzz
+- SQLite FTS5
