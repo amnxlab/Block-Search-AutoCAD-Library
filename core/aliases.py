@@ -73,13 +73,39 @@ class AliasResolver:
         Return the original query tokens PLUS all alias expansions.
         Duplicates removed, original terms preserved.
         """
-        tokens = query.lower().split()
-        expanded: List[str] = list(tokens)
+        q = query.lower().strip()
+        if not q:
+            return []
 
+        tokens = q.split()
+        expanded: List[str] = []
+
+        def _push(term: str) -> None:
+            t = term.strip()
+            if t and t not in expanded:
+                expanded.append(t)
+
+        # Keep the original full query first for highest-intent matching.
+        _push(q)
+
+        # Add individual tokens.
+        for token in tokens:
+            _push(token)
+
+        # Single-token aliases.
         for token in tokens:
             for alias in self._map.get(token, []):
-                if alias not in expanded:
-                    expanded.append(alias)
+                _push(alias)
+
+        # Phrase aliases (2-4 token windows).
+        n = len(tokens)
+        max_window = min(4, n)
+        for window in range(2, max_window + 1):
+            for start in range(0, n - window + 1):
+                phrase = " ".join(tokens[start : start + window])
+                _push(phrase)
+                for alias in self._map.get(phrase, []):
+                    _push(alias)
 
         return expanded
 

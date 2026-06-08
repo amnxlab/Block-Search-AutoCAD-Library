@@ -26,6 +26,7 @@ class FileRecord:
     folder: str = ""
     mtime: float = 0.0
     file_size: int = 0
+    parser_rev: int = 0
     scan_date: float = 0.0
     block_count: int = 0
 
@@ -38,6 +39,10 @@ class BlockRecord:
     description: str = ""
     attribute_tags: List[str] = field(default_factory=list)
     select_count: int = 0
+    geometry: List[Dict[str, Any]] = field(default_factory=list)
+    bounds: Dict[str, float] = field(default_factory=dict)
+    entity_count: int = 0
+    preview_path: str = ""
     # Derived / search fields (not stored directly)
     file_path: str = ""
     filename: str = ""
@@ -64,6 +69,7 @@ CREATE TABLE IF NOT EXISTS files (
     folder      TEXT    NOT NULL,
     mtime       REAL    NOT NULL DEFAULT 0,
     file_size   INTEGER NOT NULL DEFAULT 0,
+    parser_rev  INTEGER NOT NULL DEFAULT 0,
     scan_date   REAL    NOT NULL DEFAULT 0,
     block_count INTEGER NOT NULL DEFAULT 0
 );
@@ -76,7 +82,11 @@ CREATE TABLE IF NOT EXISTS blocks (
     block_name      TEXT    NOT NULL,
     description     TEXT    NOT NULL DEFAULT '',
     attribute_tags  TEXT    NOT NULL DEFAULT '[]',
-    select_count    INTEGER NOT NULL DEFAULT 0
+    select_count    INTEGER NOT NULL DEFAULT 0,
+    geometry_json   TEXT    NOT NULL DEFAULT '[]',
+    bounds_json     TEXT    NOT NULL DEFAULT '{}',
+    entity_count    INTEGER NOT NULL DEFAULT 0,
+    preview_path    TEXT    NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_blocks_file_id   ON blocks(file_id);
@@ -123,7 +133,7 @@ CREATE TABLE IF NOT EXISTS search_history (
 CREATE INDEX IF NOT EXISTS idx_history_block ON search_history(block_id);
 """
 
-_CURRENT_VERSION = 1
+_CURRENT_VERSION = 4
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +193,55 @@ class Database:
         if row is None:
             conn.execute("INSERT INTO schema_version VALUES (?)", (_CURRENT_VERSION,))
             conn.commit()
+        else:
+            self._migrate(conn, int(row["version"]))
         log.debug("Database initialized at %s", self._db_path)
+
+    def _migrate(self, conn: sqlite3.Connection, version: int) -> None:
+        if version >= _CURRENT_VERSION:
+            return
+
+        with self._transaction():
+            if version < 2:
+                cols = {
+                    r["name"]
+                    for r in conn.execute("PRAGMA table_info(blocks)").fetchall()
+                }
+                if "geometry_json" not in cols:
+                    conn.execute(
+                        "ALTER TABLE blocks ADD COLUMN geometry_json TEXT NOT NULL DEFAULT '[]'"
+                    )
+                if "bounds_json" not in cols:
+                    conn.execute(
+                        "ALTER TABLE blocks ADD COLUMN bounds_json TEXT NOT NULL DEFAULT '{}'"
+                    )
+                if "entity_count" not in cols:
+                    conn.execute(
+                        "ALTER TABLE blocks ADD COLUMN entity_count INTEGER NOT NULL DEFAULT 0"
+                    )
+                conn.execute("UPDATE schema_version SET version = 2")
+
+            if version < 3:
+                file_cols = {
+                    r["name"]
+                    for r in conn.execute("PRAGMA table_info(files)").fetchall()
+                }
+                if "parser_rev" not in file_cols:
+                    conn.execute(
+                        "ALTER TABLE files ADD COLUMN parser_rev INTEGER NOT NULL DEFAULT 0"
+                    )
+                conn.execute("UPDATE schema_version SET version = 3")
+
+            if version < 4:
+                block_cols = {
+                    r["name"]
+                    for r in conn.execute("PRAGMA table_info(blocks)").fetchall()
+                }
+                if "preview_path" not in block_cols:
+                    conn.execute(
+                        "ALTER TABLE blocks ADD COLUMN preview_path TEXT NOT NULL DEFAULT ''"
+                    )
+                conn.execute("UPDATE schema_version SET version = 4")
 
     # ------------------------------------------------------------------
     # File CRUD
@@ -202,6 +260,7 @@ class Database:
             folder=row["folder"],
             mtime=row["mtime"],
             file_size=row["file_size"],
+            parser_rev=row["parser_rev"] if "parser_rev" in row.keys() else 0,
             scan_date=row["scan_date"],
             block_count=row["block_count"],
         )
@@ -215,18 +274,18 @@ class Database:
             ).fetchone()
             if existing:
                 conn.execute(
-                    """UPDATE files SET filename=?, folder=?, mtime=?, file_size=?,
-                       scan_date=?, block_count=? WHERE id=?""",
-                    (rec.filename, rec.folder, rec.mtime, rec.file_size,
-                     rec.scan_date, rec.block_count, existing["id"]),
+                          """UPDATE files SET filename=?, folder=?, mtime=?, file_size=?, parser_rev=?,
+                              scan_date=?, block_count=? WHERE id=?""",
+                          (rec.filename, rec.folder, rec.mtime, rec.file_size, rec.parser_rev,
+                            rec.scan_date, rec.block_count, existing["id"]),
                 )
                 return existing["id"]
             else:
                 cur = conn.execute(
-                    """INSERT INTO files (path, filename, folder, mtime, file_size, scan_date, block_count)
-                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                    (rec.path, rec.filename, rec.folder, rec.mtime, rec.file_size,
-                     rec.scan_date, rec.block_count),
+                          """INSERT INTO files (path, filename, folder, mtime, file_size, parser_rev, scan_date, block_count)
+                              VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                          (rec.path, rec.filename, rec.folder, rec.mtime, rec.file_size,
+                            rec.parser_rev, rec.scan_date, rec.block_count),
                 )
                 return cur.lastrowid  # type: ignore[return-value]
 
@@ -253,19 +312,34 @@ class Database:
         with self._transaction():
             self._get_conn().execute("DELETE FROM blocks WHERE file_id = ?", (file_id,))
 
-    def insert_blocks_batch(self, blocks: List[BlockRecord]) -> None:
+    def insert_blocks_batch(self, blocks: List[BlockRecord]) -> List[int]:
         if not blocks:
-            return
+            return []
         rows = [
-            (b.file_id, b.block_name, b.description,
-             json.dumps(b.attribute_tags, ensure_ascii=False))
+            (
+                b.file_id,
+                b.block_name,
+                b.description,
+                json.dumps(b.attribute_tags, ensure_ascii=False),
+                json.dumps(b.geometry, ensure_ascii=False),
+                json.dumps(b.bounds, ensure_ascii=False),
+                b.entity_count,
+                b.preview_path or "",
+            )
             for b in blocks
         ]
+        inserted_ids: List[int] = []
         with self._transaction():
-            self._get_conn().executemany(
-                "INSERT INTO blocks (file_id, block_name, description, attribute_tags) VALUES (?,?,?,?)",
-                rows,
-            )
+            cur = self._get_conn().cursor()
+            for row in rows:
+                cur.execute(
+                """INSERT INTO blocks
+                   (file_id, block_name, description, attribute_tags, geometry_json, bounds_json, entity_count, preview_path)
+                   VALUES (?,?,?,?,?,?,?,?)""",
+                    row,
+                )
+                inserted_ids.append(int(cur.lastrowid))
+        return inserted_ids
 
     def increment_select_count(self, block_id: int) -> None:
         with self._transaction():
@@ -295,6 +369,7 @@ class Database:
         # FTS5 column filters: {col_name} : query
         _CAT_COL = {
             "block_name":  "block_name",
+            "description": "description",
             "keyword":     "description",
             "attribute":   "attribute_tags",
             "title_block": "description",   # title block attrs live in description
@@ -308,7 +383,8 @@ class Database:
 
         sql = """
             SELECT b.id, b.file_id, b.block_name, b.description,
-                   b.attribute_tags, b.select_count,
+                     b.attribute_tags, b.select_count,
+                                         b.geometry_json, b.bounds_json, b.entity_count, b.preview_path,
                    f.path AS file_path, f.filename, f.folder,
                    bm25(blocks_fts) AS bm25_score
             FROM blocks_fts
@@ -333,7 +409,8 @@ class Database:
         if path_filter:
             sql = """
                 SELECT b.id, b.file_id, b.block_name, b.description,
-                       b.attribute_tags, b.select_count,
+                      b.attribute_tags, b.select_count,
+                        b.geometry_json, b.bounds_json, b.entity_count, b.preview_path,
                        f.path AS file_path, f.filename, f.folder,
                        0 AS bm25_score
                 FROM blocks b
@@ -347,7 +424,8 @@ class Database:
         else:
             sql = """
                 SELECT b.id, b.file_id, b.block_name, b.description,
-                       b.attribute_tags, b.select_count,
+                      b.attribute_tags, b.select_count,
+                        b.geometry_json, b.bounds_json, b.entity_count, b.preview_path,
                        f.path AS file_path, f.filename, f.folder,
                        0 AS bm25_score
                 FROM blocks b
@@ -362,6 +440,7 @@ class Database:
         pattern = f"%{query}%"
         _COL = {
             "block_name":  "b.block_name",
+            "description": "b.description",
             "keyword":     "b.description",
             "attribute":   "b.attribute_tags",
             "title_block": "b.description",
@@ -375,7 +454,8 @@ class Database:
             params = (pattern, pattern, pattern, limit)
         sql = f"""
             SELECT b.id, b.file_id, b.block_name, b.description,
-                   b.attribute_tags, b.select_count,
+                     b.attribute_tags, b.select_count,
+                                         b.geometry_json, b.bounds_json, b.entity_count, b.preview_path,
                    f.path AS file_path, f.filename, f.folder,
                    0 AS bm25_score
             FROM blocks b
@@ -397,6 +477,7 @@ class Database:
         sql = f"""
             SELECT b.id, b.file_id, b.block_name, b.description,
                    b.attribute_tags, b.select_count,
+                     b.geometry_json, b.bounds_json, b.entity_count, b.preview_path,
                    f.path AS file_path, f.filename, f.folder,
                    0 AS bm25_score
             FROM blocks b
@@ -405,6 +486,87 @@ class Database:
         """
         rows = self._get_conn().execute(sql, ids).fetchall()
         return [_row_to_block(r) for r in rows]
+
+    def get_block_by_id(self, block_id: int) -> Optional[BlockRecord]:
+        row = self._get_conn().execute(
+            """
+            SELECT b.id, b.file_id, b.block_name, b.description,
+                   b.attribute_tags, b.select_count,
+                     b.geometry_json, b.bounds_json, b.entity_count, b.preview_path,
+                   f.path AS file_path, f.filename, f.folder,
+                   0 AS bm25_score
+            FROM blocks b
+            JOIN files f ON b.file_id = f.id
+            WHERE b.id = ?
+            """,
+            (block_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return _row_to_block(row)
+
+    def get_all_blocks_for_precache(self) -> List[BlockRecord]:
+        rows = self._get_conn().execute(
+            """
+            SELECT b.id, b.file_id, b.block_name, b.description,
+                   b.attribute_tags, b.select_count,
+                   b.geometry_json, b.bounds_json, b.entity_count, b.preview_path,
+                   f.path AS file_path, f.filename, f.folder,
+                   0 AS bm25_score
+            FROM blocks b
+            JOIN files f ON b.file_id = f.id
+            ORDER BY f.path, b.block_name
+            """
+        ).fetchall()
+        return [_row_to_block(r) for r in rows]
+
+    def get_blocks_missing_preview_path(self) -> List[BlockRecord]:
+        rows = self._get_conn().execute(
+            """
+            SELECT b.id, b.file_id, b.block_name, b.description,
+                   b.attribute_tags, b.select_count,
+                   b.geometry_json, b.bounds_json, b.entity_count, b.preview_path,
+                   f.path AS file_path, f.filename, f.folder,
+                   0 AS bm25_score
+            FROM blocks b
+            JOIN files f ON b.file_id = f.id
+            WHERE b.preview_path = ''
+            ORDER BY f.path, b.block_name
+            """
+        ).fetchall()
+        return [_row_to_block(r) for r in rows]
+
+    def update_block_preview_path(self, block_id: int, preview_path: str) -> None:
+        with self._transaction():
+            self._get_conn().execute(
+                """
+                UPDATE blocks
+                SET preview_path = ?
+                WHERE id = ?
+                """,
+                (preview_path or "", block_id),
+            )
+
+    def update_block_geometry(
+        self,
+        block_id: int,
+        geometry: List[Dict[str, Any]],
+        bounds: Dict[str, float],
+    ) -> None:
+        with self._transaction():
+            self._get_conn().execute(
+                """
+                UPDATE blocks
+                SET geometry_json = ?, bounds_json = ?, entity_count = ?
+                WHERE id = ?
+                """,
+                (
+                    json.dumps(geometry or [], ensure_ascii=False),
+                    json.dumps(bounds or {}, ensure_ascii=False),
+                    len(geometry or []),
+                    block_id,
+                ),
+            )
 
     # ------------------------------------------------------------------
     # Aliases
@@ -463,6 +625,24 @@ def _row_to_block(row: Any) -> BlockRecord:
         tags = json.loads(row["attribute_tags"] or "[]")
     except (json.JSONDecodeError, TypeError):
         tags = []
+
+    raw_geometry = row["geometry_json"] if "geometry_json" in row.keys() else "[]"
+    raw_bounds = row["bounds_json"] if "bounds_json" in row.keys() else "{}"
+
+    try:
+        geometry = json.loads(raw_geometry or "[]")
+        if not isinstance(geometry, list):
+            geometry = []
+    except (json.JSONDecodeError, TypeError):
+        geometry = []
+
+    try:
+        bounds = json.loads(raw_bounds or "{}")
+        if not isinstance(bounds, dict):
+            bounds = {}
+    except (json.JSONDecodeError, TypeError):
+        bounds = {}
+
     return BlockRecord(
         id=row["id"],
         file_id=row["file_id"],
@@ -470,6 +650,10 @@ def _row_to_block(row: Any) -> BlockRecord:
         description=row["description"],
         attribute_tags=tags,
         select_count=row["select_count"],
+        geometry=geometry,
+        bounds=bounds,
+        entity_count=row["entity_count"] if "entity_count" in row.keys() else len(geometry),
+        preview_path=row["preview_path"] if "preview_path" in row.keys() else "",
         file_path=row["file_path"],
         filename=row["filename"],
         folder=row["folder"],
@@ -479,7 +663,7 @@ def _row_to_block(row: Any) -> BlockRecord:
 def _sanitize_fts_query(query: str) -> str:
     """Convert a raw query string into a safe FTS5 MATCH expression."""
     # Remove FTS special characters that might break the query
-    special = set('":*()^~-')
+    special = set('":*()^~')
     cleaned = "".join(ch if ch not in special else " " for ch in query)
     tokens = cleaned.split()
     if not tokens:

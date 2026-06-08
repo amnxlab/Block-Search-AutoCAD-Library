@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -42,6 +42,7 @@ class IndexManagerDialog(QDialog):
         self._db = db
         self._config = config
         self._indexer: Optional[IndexerWorker] = None
+        self._poll_timer: Optional[QTimer] = None
 
         self.setWindowTitle("Index Manager")
         self.setMinimumSize(700, 480)
@@ -212,12 +213,25 @@ class IndexManagerDialog(QDialog):
         self._btn_scan.setText("⏹  Stop")
         self._btn_clear.setEnabled(False)
 
-        self._indexer = IndexerWorker(self._db, self._config, parent=self)
-        self._indexer.progress.connect(self._on_progress)
-        self._indexer.status.connect(self._status_label.setText)
+        self._indexer = IndexerWorker(self._config, parent=self)
         self._indexer.finished.connect(self._on_scan_finished)
         self._indexer.error.connect(lambda e: self._status_label.setText(f"Error: {e}"))
+
+        self._poll_timer = QTimer(self)
+        self._poll_timer.setInterval(100)
+        self._poll_timer.timeout.connect(self._poll_indexer)
+        self._poll_timer.start()
+
         self._indexer.start()
+
+    def _poll_indexer(self) -> None:
+        """Called every 100 ms from QTimer — runs on main thread."""
+        if self._indexer is None:
+            return
+        state = self._indexer.get_state()
+        self._on_progress(state["current"], state["total"])
+        if state["status_msg"]:
+            self._status_label.setText(state["status_msg"])
 
     def _on_progress(self, current: int, total: int) -> None:
         if total > 0:
@@ -226,6 +240,16 @@ class IndexManagerDialog(QDialog):
             self._progress_bar.setFormat(f"{current} / {total}  ({pct}%)")
 
     def _on_scan_finished(self) -> None:
+        if self._poll_timer is not None:
+            self._poll_timer.stop()
+            self._poll_timer.deleteLater()
+            self._poll_timer = None
+        # Final state flush
+        if self._indexer is not None:
+            state = self._indexer.get_state()
+            self._on_progress(state["current"], state["total"])
+            if state["status_msg"]:
+                self._status_label.setText(state["status_msg"])
         self._btn_scan.setText("▶  Start Indexing")
         self._btn_clear.setEnabled(True)
         self._progress_bar.setValue(100)

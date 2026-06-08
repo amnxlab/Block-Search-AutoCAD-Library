@@ -50,6 +50,7 @@ class SearchEngine:
     # Category constants
     CAT_ALL         = "all"
     CAT_BLOCK_NAME  = "block_name"
+    CAT_DESCRIPTION = "description"
     CAT_KEYWORD     = "keyword"
     CAT_ATTRIBUTE   = "attribute"
     CAT_FILENAME    = "filename"
@@ -64,7 +65,7 @@ class SearchEngine:
         """
         Execute a search and return sorted BlockRecord list (best first).
 
-        category  : one of all | block_name | keyword | attribute |
+        category  : one of all | block_name | description | keyword | attribute |
                     filename | title_block
         path_filter : optional directory path — restrict results to files
                       inside this folder (or any sub-folder)
@@ -93,8 +94,8 @@ class SearchEngine:
                 if rec.id not in fts_results:
                     fts_results[rec.id] = rec
 
-        # Tier 3: fuzzy fallback on block names when FTS returns few results
-        if len(fts_results) < 10 and _HAS_RAPIDFUZZ and category in (
+        # Tier 3: fuzzy candidate expansion (always enabled for name-centric categories)
+        if _HAS_RAPIDFUZZ and category in (
             self.CAT_ALL, self.CAT_BLOCK_NAME
         ):
             fuzzy_ids = self._fuzzy_search(expanded_terms)
@@ -110,19 +111,30 @@ class SearchEngine:
         # Optional path filter
         candidates = list(fts_results.values())
         if path_filter:
-            norm = os.path.normcase(path_filter)
+            norm = os.path.normcase(os.path.normpath(path_filter.strip()))
             candidates = [
                 r for r in candidates
-                if os.path.normcase(r.file_path).startswith(norm)
+                if os.path.normcase(os.path.normpath(r.file_path)).startswith(norm)
             ]
 
         # Score each result
-        scored = [self._score(rec, query, expanded_terms, category) for rec in candidates]
+        scored = [
+            self._score(rec, query, expanded_terms, category)
+            for rec in candidates
+        ]
 
         # Filter out anything below threshold / 2 and sort
         cutoff = self._threshold / 2
         scored = [r for r in scored if r.score >= cutoff]
-        scored.sort(key=lambda r: r.score, reverse=True)
+        scored.sort(
+            key=lambda r: (
+                r.score,
+                self._name_closeness(r.block_name, query),
+                r.select_count,
+                -len(r.block_name),
+            ),
+            reverse=True,
+        )
 
         return scored[: self._max_results]
 
@@ -137,6 +149,15 @@ class SearchEngine:
         expanded_terms: List[str],
         category: str = "all",
     ) -> BlockRecord:
+        if category == self.CAT_DESCRIPTION:
+            score = self._score_description(rec, original_query, expanded_terms)
+            # Frequency boost: +0-15
+            if rec.select_count > 0:
+                boost = min(15.0, 3.0 * (rec.select_count ** 0.5))
+                score = min(100.0, score + boost)
+            rec.score = round(score, 1)
+            return rec
+
         name_lower = rec.block_name.lower()
         query_lower = original_query.lower()
 
@@ -147,17 +168,17 @@ class SearchEngine:
             score = 100.0
         # Exact match against any expanded term
         elif name_lower in expanded_terms:
-            score = 98.0
+            score = 88.0
         # Prefix match
         elif name_lower.startswith(query_lower):
             score = 90.0 + min(9.0, 9.0 * len(query_lower) / max(len(name_lower), 1))
-        elif any(name_lower.startswith(t) for t in expanded_terms):
-            score = 88.0
-        # Substring
+        # Substring on the original query has priority over alias-derived matches
         elif query_lower in name_lower:
-            score = 80.0
+            score = 82.0
+        elif any(name_lower.startswith(t) for t in expanded_terms):
+            score = 72.0
         elif any(t in name_lower for t in expanded_terms):
-            score = 78.0
+            score = 66.0
         elif _HAS_RAPIDFUZZ:
             # RapidFuzz WRatio
             best = max(
@@ -187,6 +208,80 @@ class SearchEngine:
 
         rec.score = round(score, 1)
         return rec
+
+    def _score_description(
+        self,
+        rec: BlockRecord,
+        original_query: str,
+        expanded_terms: List[str],
+    ) -> float:
+        query_lower = (original_query or "").lower().strip()
+        terms = [t.lower().strip() for t in expanded_terms if t and t.strip()]
+
+        haystack_parts = [
+            rec.block_name or "",
+            rec.description or "",
+            " ".join(rec.attribute_tags or []),
+            rec.filename or "",
+            rec.folder or "",
+        ]
+        haystack = " ".join(p for p in haystack_parts if p).lower()
+        if not haystack:
+            return 0.0
+
+        score = 0.0
+
+        # Prioritize direct query containment first.
+        if query_lower and query_lower in haystack:
+            score = max(score, 82.0)
+
+        # Coverage of expanded terms in full context.
+        if terms:
+            matched = sum(1 for t in terms if t in haystack)
+            coverage = matched / max(len(terms), 1)
+            score = max(score, 55.0 + 25.0 * coverage)
+
+        # Token overlap adds signal for note-like descriptions.
+        query_tokens = [t for t in re.findall(r"[a-z0-9_]+", query_lower) if len(t) > 1]
+        if query_tokens:
+            token_hits = sum(1 for t in query_tokens if t in haystack)
+            token_ratio = token_hits / max(len(query_tokens), 1)
+            score = max(score, 50.0 + 22.0 * token_ratio)
+
+        if _HAS_RAPIDFUZZ and (query_lower or terms):
+            candidates = [query_lower] + terms
+            best = max(
+                (
+                    rf_fuzz.WRatio(
+                        haystack,
+                        t,
+                        processor=rf_utils.default_process,
+                    )
+                    for t in candidates
+                    if t
+                ),
+                default=0,
+            )
+            if best >= self._threshold:
+                score = max(score, 50.0 + 24.0 * (best - self._threshold) / (100.0 - self._threshold))
+            else:
+                score = max(score, best * 50.0 / max(self._threshold, 1))
+
+        return min(100.0, score)
+
+    def _name_closeness(self, block_name: str, query: str) -> float:
+        """Tie-breaker: prioritize lexical closeness to the original query."""
+        if not block_name or not query:
+            return 0.0
+        a = block_name.lower()
+        b = query.lower()
+        if _HAS_RAPIDFUZZ:
+            return float(rf_fuzz.WRatio(a, b, processor=rf_utils.default_process))
+        # Fallback: rough overlap ratio when rapidfuzz is unavailable
+        if b in a:
+            return 80.0
+        token_overlap = len(set(a.split()) & set(b.split()))
+        return float(token_overlap * 10)
 
     def _filename_search(self, query: str, path_filter: str) -> List[BlockRecord]:
         """Search by DWG filename (not block name)."""
@@ -228,7 +323,7 @@ class SearchEngine:
         seen: set = set()
 
         for term in terms:
-            matches = rf_process.extractBests(
+            matches = rf_process.extract(
                 term,
                 name_list,
                 scorer=rf_fuzz.WRatio,

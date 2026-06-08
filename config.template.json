@@ -11,5 +11,7 @@
   "log_level": "INFO",
   "log_file": "",
   "temp_dir": "",
-  "preview_prefer_acad": true
+  "preview_prefer_acad": true,
+  "preview_export_on_index": true,
+  "preview_image_size": 700
 }

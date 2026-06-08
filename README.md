@@ -12,6 +12,10 @@ A desktop search tool for AutoCAD block libraries. Index thousands of DWG/DXF fi
 - **Fuzzy matching** via RapidFuzz for typo-tolerant results
 - **DWG + DXF support** — DXF files parsed directly with ezdxf; DWG files converted via ODA File Converter
 - **Fast incremental indexing** — background QThread scanner with progress feedback
+- **Persistent preview export during indexing** — previews are generated once and stored under `data/previews/`
+- **Zero runtime AutoCAD dependency for preview** — result selection reads indexed preview files (no on-demand COM rendering)
+- **Vector fallback preview** — if PNG preview is unavailable, geometry is rendered directly in the viewport
+- **Viewport zoom/pan** — mouse wheel zoom + drag pan for both vector and raster previews
 - **Dark UI** — PySide6 QWebEngineView SPA (VS Code-inspired theme)
 - **Resizable table columns** — drag column headers to resize
 - **Open in Explorer** — click 📁 to open the file's folder with the file selected
@@ -90,6 +94,17 @@ On first launch, the app will:
 2. Create the SQLite database under `data/`
 3. Prompt you to add scan paths if none are configured
 
+> If you upgraded from an older version, run indexing once to backfill missing previews for already indexed blocks.
+
+---
+
+## Preview Architecture (Important)
+
+- Previews are generated at indexing time and persisted on disk (`data/previews/`).
+- Runtime preview requests do not call AutoCAD.
+- If a preview image is missing, the app falls back to vector rendering from stored geometry.
+- Blocks that fail preview generation are marked and skipped on later indexing runs to keep reindexing fast.
+
 ---
 
 ## Project Structure
@@ -101,6 +116,7 @@ Block-Search-AutoCAD-Library/
 │   ├── database.py         # SQLite FTS5 schema + queries
 │   ├── dwg_parser.py       # DWG/DXF → block records (ezdxf + ODA)
 │   ├── indexer.py          # Background file scanner (QThread)
+│   ├── preview_exporter.py # Index-time geometry → PNG preview renderer
 │   └── search_engine.py    # FTS5 + fuzzy search
 ├── gui/
 │   ├── bridge.py           # QWebChannel backend (JS ↔ Python)
@@ -114,7 +130,7 @@ Block-Search-AutoCAD-Library/
 ├── main.py                 # Entry point
 ├── setup_oda.py            # ODA download helper
 ├── make_ico.py             # SVG → ICO converter (build tool)
-├── build.ps1               # PyInstaller build script
+├── build.cmd               # Build script
 ├── build.spec              # PyInstaller spec
 └── requirements.txt
 ```
@@ -125,12 +141,10 @@ Block-Search-AutoCAD-Library/
 
 Requires PyInstaller (included in `requirements.txt`).
 
-```powershell
-# Standard build → dist\BlockSearchTool\BlockSearchTool.exe
-.\build.ps1
+Use the project build command script:
 
-# Clean build + portable ZIP
-.\build.ps1 -Clean -Zip
+```powershell
+build.cmd
 ```
 
 The `make_ico.py` script runs automatically during the build to generate `resources/icon.ico` from `resources/icon.svg`.
@@ -161,6 +175,8 @@ Without ODA, DXF files are still indexed and searchable.
 | `fuzzy_threshold` | `60` | Minimum fuzzy match score (0–100) |
 | `max_results` | `200` | Maximum search results to display |
 | `debounce_ms` | `300` | Search input debounce delay |
+| `preview_export_on_index` | `true` | Export and persist previews during indexing |
+| `preview_image_size` | `700` | PNG size in pixels for indexed previews |
 | `theme` | `"dark"` | UI theme (`"dark"` only currently) |
 
 ---

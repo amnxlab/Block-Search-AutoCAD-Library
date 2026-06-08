@@ -89,24 +89,18 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)  # noqa: F821
 exe = EXE(  # noqa: F821
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name="BlockSearchTool",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # no console window
-    icon=str(ROOT / "resources" / "icon.ico") if (ROOT / "resources" / "icon.ico").exists() else None,
-)
-
-coll = COLLECT(  # noqa: F821
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
     upx_exclude=[],
-    name="BlockSearchTool",
+    runtime_tmpdir=None,
+    console=False,  # no console window
+    onefile=True,
+    icon=str(ROOT / "resources" / "icon.ico") if (ROOT / "resources" / "icon.ico").exists() else None,
 )

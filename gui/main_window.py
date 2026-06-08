@@ -54,12 +54,12 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._view)
 
         # ── Load HTML ─────────────────────────────────────────────────
-        base_dir = Path(self._config.get("_base_dir", "."))
-        html_path = base_dir / "resources" / "ui" / "index.html"
+        res_dir = Path(self._config.get("_resources_dir", self._config.get("_base_dir", ".")))
+        html_path = res_dir / "resources" / "ui" / "index.html"
         self._view.setUrl(QUrl.fromLocalFile(str(html_path)))
 
         # ── Window icon from SVG ──────────────────────────────────────
-        icon_path = base_dir / "resources" / "icon.svg"
+        icon_path = res_dir / "resources" / "icon.svg"
         if icon_path.is_file():
             renderer = QSvgRenderer(str(icon_path))
             icon = QIcon()
@@ -81,7 +81,7 @@ class MainWindow(QMainWindow):
 
     def _build_alias_resolver(self) -> AliasResolver:
         resolver = AliasResolver()
-        base = Path(self._config.get("_base_dir", "."))
+        base = Path(self._config.get("_resources_dir", self._config.get("_base_dir", ".")))
         aliases_file = base / "resources" / "aliases.json"
         if aliases_file.exists():
             resolver.load_from_file(str(aliases_file))

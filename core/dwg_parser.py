@@ -10,6 +10,7 @@ Strategy:
   5. Delete the temp .dxf when done.
 """
 import logging
+import math
 import os
 import re
 import shutil
@@ -19,6 +20,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 log = logging.getLogger(__name__)
+logging.getLogger("ezdxf").setLevel(logging.ERROR)
 
 # Anonymous block patterns to skip
 _ANON_PATTERNS = re.compile(
@@ -32,6 +34,8 @@ class ParsedBlock:
     name: str
     description: str = ""
     attribute_tags: List[str] = field(default_factory=list)
+    entities: List[Dict[str, Any]] = field(default_factory=list)
+    bounds: Dict[str, float] = field(default_factory=dict)
 
 
 @dataclass
@@ -97,11 +101,14 @@ def _parse_dxf(dxf_path: str, skip_anonymous: bool) -> ParseResult:
 
         description = _get_block_description(blk)
         attdef_tags = _extract_attdef_tags(blk)
+        entities, bounds = _extract_geometry(blk)
 
         blocks.append(ParsedBlock(
             name=name,
             description=description,
             attribute_tags=attdef_tags,
+            entities=entities,
+            bounds=bounds,
         ))
 
     return ParseResult(blocks=blocks, source="dxf_direct")
@@ -249,10 +256,13 @@ def _try_ezdxf_direct(dwg_path: str, skip_anonymous: bool) -> ParseResult:
         name: str = blk.name
         if skip_anonymous and _is_anonymous(name):
             continue
+        entities, bounds = _extract_geometry(blk)
         blocks.append(ParsedBlock(
             name=name,
             description=_get_block_description(blk),
             attribute_tags=_extract_attdef_tags(blk),
+            entities=entities,
+            bounds=bounds,
         ))
     return ParseResult(blocks=blocks, source="dxf_direct")
 
@@ -287,3 +297,164 @@ def _extract_attdef_tags(blk: Any) -> List[str]:
     except Exception:
         pass
     return tags
+
+
+def _extract_geometry(blk: Any) -> tuple[List[Dict[str, Any]], Dict[str, float]]:
+    entities: List[Dict[str, Any]] = []
+    min_x = float("inf")
+    min_y = float("inf")
+    max_x = float("-inf")
+    max_y = float("-inf")
+
+    def update_bounds(x: float, y: float) -> None:
+        nonlocal min_x, min_y, max_x, max_y
+        min_x = min(min_x, x)
+        min_y = min(min_y, y)
+        max_x = max(max_x, x)
+        max_y = max(max_y, y)
+
+    def add_point(x: Any, y: Any) -> tuple[float, float]:
+        fx = float(x)
+        fy = float(y)
+        update_bounds(fx, fy)
+        return fx, fy
+
+    def process_entity(entity: Any, default_layer: str = "0") -> None:
+        layer = getattr(entity.dxf, "layer", default_layer) or default_layer
+        etype = entity.dxftype()
+
+        if etype == "LINE":
+            s = entity.dxf.start
+            e = entity.dxf.end
+            x1, y1 = add_point(s.x, s.y)
+            x2, y2 = add_point(e.x, e.y)
+            entities.append({
+                "type": "LINE",
+                "coords": [[x1, y1], [x2, y2]],
+                "layer": layer,
+            })
+
+        elif etype == "CIRCLE":
+            c = entity.dxf.center
+            r = float(entity.dxf.radius)
+            cx, cy = add_point(c.x, c.y)
+            update_bounds(cx - r, cy - r)
+            update_bounds(cx + r, cy + r)
+            entities.append({
+                "type": "CIRCLE",
+                "center": [cx, cy],
+                "radius": r,
+                "layer": layer,
+            })
+
+        elif etype == "ARC":
+            c = entity.dxf.center
+            r = float(entity.dxf.radius)
+            cx, cy = add_point(c.x, c.y)
+            sa = float(entity.dxf.start_angle)
+            ea = float(entity.dxf.end_angle)
+            # Include full circle extents as a safe bounds envelope.
+            update_bounds(cx - r, cy - r)
+            update_bounds(cx + r, cy + r)
+            entities.append({
+                "type": "ARC",
+                "center": [cx, cy],
+                "radius": r,
+                "start_angle": sa,
+                "end_angle": ea,
+                "layer": layer,
+            })
+
+        elif etype in ("LWPOLYLINE", "POLYLINE"):
+            pts: List[List[float]] = []
+            closed = bool(getattr(entity, "is_closed", False))
+            try:
+                raw = list(entity.get_points())
+                for p in raw:
+                    x, y = add_point(p[0], p[1])
+                    pts.append([x, y])
+            except Exception:
+                pts = []
+            if len(pts) >= 2:
+                entities.append({
+                    "type": "POLYLINE",
+                    "coords": pts,
+                    "closed": closed,
+                    "layer": layer,
+                })
+
+        elif etype in ("TEXT", "MTEXT", "ATTRIB", "ATTDEF"):
+            text_value = ""
+            x = 0.0
+            y = 0.0
+            height = 2.5
+            rotation = 0.0
+
+            try:
+                if etype == "MTEXT":
+                    text_value = (entity.plain_text() or "").strip()
+                    ins = entity.dxf.insert
+                    height = float(getattr(entity.dxf, "char_height", 2.5) or 2.5)
+                    rotation = float(getattr(entity.dxf, "rotation", 0.0) or 0.0)
+                else:
+                    text_value = str(getattr(entity.dxf, "text", "") or "").strip()
+                    ins = entity.dxf.insert
+                    height = float(getattr(entity.dxf, "height", 2.5) or 2.5)
+                    rotation = float(getattr(entity.dxf, "rotation", 0.0) or 0.0)
+
+                if text_value:
+                    x, y = add_point(ins.x, ins.y)
+                    # Approximate text bbox for fit-to-view in fallback renderer.
+                    txt_w = max(height * 0.6, len(text_value) * height * 0.6)
+                    txt_h = max(height, 1.0)
+                    update_bounds(x + txt_w, y + txt_h)
+                    update_bounds(x - txt_w * 0.1, y - txt_h * 0.2)
+                    entities.append({
+                        "type": "TEXT",
+                        "text": text_value,
+                        "position": [x, y],
+                        "height": height,
+                        "rotation": rotation,
+                        "layer": layer,
+                    })
+            except Exception:
+                pass
+
+    try:
+        for entity in blk:
+            try:
+                if entity.dxftype() == "INSERT":
+                    try:
+                        for sub in entity.virtual_entities():
+                            try:
+                                process_entity(sub, default_layer=getattr(entity.dxf, "layer", "0") or "0")
+                            except Exception:
+                                continue
+                    except Exception:
+                        continue
+                else:
+                    process_entity(entity)
+
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    if not entities:
+        return [], {}
+
+    # Keep bounds finite and non-zero to simplify viewport fit calculations.
+    if not math.isfinite(min_x) or not math.isfinite(min_y) or not math.isfinite(max_x) or not math.isfinite(max_y):
+        return entities, {}
+
+    if abs(max_x - min_x) < 1e-9:
+        max_x = min_x + 1.0
+    if abs(max_y - min_y) < 1e-9:
+        max_y = min_y + 1.0
+
+    return entities, {
+        "min_x": float(min_x),
+        "min_y": float(min_y),
+        "max_x": float(max_x),
+        "max_y": float(max_y),
+    }

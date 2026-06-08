@@ -280,6 +280,31 @@ body {
 #progress-pct    { font-size: 11px; font-family: var(--mono); color: var(--accent); flex-shrink:0; padding-left:8px; }
 #progress-file   { font-size: 10px; color: var(--text3); font-family: var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:3px; min-height:14px; }
 
+/* index log console */
+#index-log-wrap {
+  margin: 6px 0 0;
+  max-height: 108px;
+  overflow-y: auto;
+  background: var(--bg0);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: none;
+}
+#index-log {
+  padding: 5px 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text2);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.log-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.55; }
+.log-line.log-file   { color: var(--green); }
+.log-line.log-skip   { color: var(--text3); }
+.log-line.log-status { color: var(--text2); font-style: italic; }
+.log-line.log-done   { color: var(--accent2); font-weight: 600; }
+
 /* bottom status bar */
 #statusbar {
   height: 22px;
@@ -467,6 +492,127 @@ body {
   background: var(--bg2);
 }
 
+#content-split {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#results-pane {
+  flex: 1;
+  min-width: 420px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#viewport-panel {
+  width: 42%;
+  min-width: 360px;
+  border-left: 1px solid var(--border);
+  background: linear-gradient(180deg, #1e2328 0%, #171b1f 100%);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#viewport-header {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(20, 20, 20, 0.5);
+}
+
+#viewport-title {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  color: var(--text2);
+  text-transform: uppercase;
+}
+
+#viewport-meta {
+  font-size: 11px;
+  color: var(--green);
+  font-family: var(--mono);
+}
+
+#viewport-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#viewport-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: #111417;
+  cursor: grab;
+}
+
+#viewport-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform-origin: 0 0;
+  background: #111417;
+  display: none;
+}
+
+#viewport-svg.is-panning {
+  cursor: grabbing;
+}
+
+#viewport-image.is-panning {
+  cursor: grabbing;
+}
+
+#viewport-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text3);
+  font-size: 12px;
+  text-align: center;
+  padding: 24px;
+  pointer-events: none;
+}
+
+#viewport-controls {
+  height: 34px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 10px;
+  background: rgba(20, 20, 20, 0.45);
+}
+
+.viewport-btn {
+  background: var(--bg4);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text1);
+  font-size: 11px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.viewport-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 /* ─── Results Header ─── */
 #results-header {
   display: flex;
@@ -486,6 +632,20 @@ body {
 
 #results-header-spacer { flex: 1; }
 
+#index-done-chip {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  background: #163126;
+  border: 1px solid var(--green);
+  color: var(--green);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .sort-label { font-size: 11px; color: var(--text3); }
 #sort-select {
   background: var(--bg3);
@@ -503,7 +663,6 @@ body {
   flex: 1;
   overflow: auto;
 }
-
 table {
   width: 100%;
   border-collapse: collapse;
@@ -785,6 +944,30 @@ tbody tr.selected .row-actions { opacity: 1; }
 
 /* ─── Highlight match ─── */
 .hl { color: var(--accent2); font-weight: 700; }
+
+@media (max-width: 1200px) {
+  #viewport-panel {
+    width: 38%;
+    min-width: 320px;
+  }
+}
+
+@media (max-width: 980px) {
+  #content-split {
+    flex-direction: column;
+  }
+  #results-pane {
+    min-width: 0;
+    min-height: 300px;
+  }
+  #viewport-panel {
+    width: 100%;
+    min-width: 0;
+    min-height: 280px;
+    border-left: none;
+    border-top: 1px solid var(--border);
+  }
+}
 </style>
 </head>
 <body>
@@ -845,6 +1028,7 @@ tbody tr.selected .row-actions { opacity: 1; }
     <div class="cat-tabs" id="cat-tabs">
       <button class="cat-tab active" data-cat="all"         onclick="setCategory(this)">All</button>
       <button class="cat-tab"        data-cat="block_name"  onclick="setCategory(this)">Block Name</button>
+      <button class="cat-tab"        data-cat="description" onclick="setCategory(this)">Description</button>
       <button class="cat-tab"        data-cat="keyword"     onclick="setCategory(this)">Keyword</button>
       <button class="cat-tab"        data-cat="attribute"   onclick="setCategory(this)">Attribute Tag</button>
       <button class="cat-tab"        data-cat="filename"    onclick="setCategory(this)">Filename</button>
@@ -861,7 +1045,10 @@ tbody tr.selected .row-actions { opacity: 1; }
                onkeydown="onSearchKeyDown(event)"/>
         <button class="clear-btn" id="clear-btn" onclick="clearSearch()">×</button>
       </div>
-    </div>
+        <div id="index-log-wrap">
+          <div id="index-log"></div>
+        </div>
+      </div>
 
     <!-- ODA Status Banner -->
     <div id="oda-banner" class="warn">
@@ -894,6 +1081,7 @@ tbody tr.selected .row-actions { opacity: 1; }
     <div id="results-header">
       <span id="results-count"><strong>0</strong> results</span>
       <div id="results-header-spacer"></div>
+      <span id="index-done-chip">Indexing completed</span>
       <span class="sort-label">Sort by</span>
       <select id="sort-select" onchange="sortResults()">
         <option value="score">Match Score</option>
@@ -903,29 +1091,48 @@ tbody tr.selected .row-actions { opacity: 1; }
       </select>
     </div>
 
-    <!-- Table -->
-    <div id="table-wrap">
-      <div id="empty-state">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-        </svg>
-        <h3 id="empty-title">No blocks indexed yet</h3>
-        <p id="empty-msg">Add a DesignCenter folder path on the left, then click <strong>▶ Index Paths</strong> to scan your DWG files.</p>
+    <div id="content-split">
+      <div id="results-pane">
+        <!-- Table -->
+        <div id="table-wrap">
+          <div id="empty-state">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <h3 id="empty-title">No blocks indexed yet</h3>
+            <p id="empty-msg">Add a DesignCenter folder path on the left, then click <strong>▶ Index Paths</strong> to scan your DWG files.</p>
+          </div>
+
+          <table id="results-table" style="display:none; table-layout:fixed;">
+            <thead>
+              <tr>
+                <th class="col-score" onclick="toggleSort('score')">Score <span class="sort-arrow">↓</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+                <th class="col-name"  onclick="toggleSort('block_name')">Block Name <span class="sort-arrow">↕</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+                <th class="col-file"  onclick="toggleSort('filename')">File <span class="sort-arrow">↕</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+                <th class="col-folder" onclick="toggleSort('folder')">Folder <span class="sort-arrow">↕</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+                <th class="col-path">Full Path<div class="col-resizer" onclick="event.stopPropagation()"></div></th>
+                <th class="col-acts"></th>
+              </tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+          </table>
+        </div>
       </div>
 
-      <table id="results-table" style="display:none; table-layout:fixed;">
-        <thead>
-          <tr>
-            <th class="col-score" onclick="toggleSort('score')">Score <span class="sort-arrow">↓</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
-            <th class="col-name"  onclick="toggleSort('block_name')">Block Name <span class="sort-arrow">↕</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
-            <th class="col-file"  onclick="toggleSort('filename')">File <span class="sort-arrow">↕</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
-            <th class="col-folder" onclick="toggleSort('folder')">Folder <span class="sort-arrow">↕</span><div class="col-resizer" onclick="event.stopPropagation()"></div></th>
-            <th class="col-path">Full Path<div class="col-resizer" onclick="event.stopPropagation()"></div></th>
-            <th class="col-acts"></th>
-          </tr>
-        </thead>
-        <tbody id="results-body"></tbody>
-      </table>
+      <aside id="viewport-panel">
+        <div id="viewport-header">
+          <span id="viewport-title">Block View</span>
+          <span id="viewport-meta">No selection</span>
+        </div>
+        <div id="viewport-stage">
+          <svg id="viewport-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+          <img id="viewport-image" alt="AutoCAD preview"/>
+          <div id="viewport-empty">Select a block from search results to inspect geometry.</div>
+        </div>
+        <div id="viewport-controls">
+          <button class="viewport-btn" onclick="resetViewportView()">Reset View</button>
+        </div>
+      </aside>
     </div>
 
   </div>
@@ -1028,6 +1235,24 @@ let searchDebounce  = null;
 let sortKey         = 'score';
 let sortAsc         = false;
 let ctxRecord       = null;
+let viewportState   = {
+  base: null,
+  current: null,
+  isPanning: false,
+  startX: 0,
+  startY: 0,
+  startView: null,
+  imgScale: 1,
+  imgMinScale: 1,
+  imgMaxScale: 8,
+  imgPanX: 0,
+  imgPanY: 0,
+  imgStartPanX: 0,
+  imgStartPanY: 0,
+  imgDragging: false,
+  reqId: 0,
+  activeBlockId: null,
+};
 
 /* ══════════════════════════════════════════════════════════════
    QWebChannel Handshake
@@ -1037,6 +1262,7 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
 
   // Wire up Python→JS signals
   backend.indexingProgress.connect(onIndexingProgress);
+  backend.indexingLogLine.connect(onIndexingLogLine);
   backend.indexingFinished.connect(onIndexingFinished);
   backend.statsChanged.connect(onStatsChanged);
   backend.errorOccurred.connect(onError);
@@ -1155,9 +1381,16 @@ function setStatus(state, mainText, fileText, pct) {
    Indexing
 ══════════════════════════════════════════════════════════════ */
 let isIndexing = false;
+let doneChipTimer = null;
 
 function startScan() {
   if (!backend) return;
+  const doneChip = document.getElementById('index-done-chip');
+  if (doneChip) doneChip.style.display = 'none';
+  if (doneChipTimer) {
+    clearTimeout(doneChipTimer);
+    doneChipTimer = null;
+  }
   if (isIndexing) {
     const btn = document.getElementById('btn-scan');
     btn.textContent = 'Stopping…';
@@ -1176,38 +1409,83 @@ function startScan() {
   btn.textContent = '⏹ Stop';
   btn.disabled = false;
   setStatus('scanning', 'Starting indexer…');
+  // Reset log panel
+  const logEl = document.getElementById('index-log');
+  const logWrap = document.getElementById('index-log-wrap');
+  if (logEl) logEl.innerHTML = '';
+  if (logWrap) { logWrap.style.display = 'block'; logWrap.scrollTop = 0; }
   backend.startIndexing(function() {});
 }
 
-function onIndexingProgress(current, total, msg) {
-  let mainText, fileText, pct;
+function appendLogLine(text, cls) {
+  const wrap = document.getElementById('index-log-wrap');
+  const log  = document.getElementById('index-log');
+  if (!wrap || !log) return;
+  const div = document.createElement('div');
+  div.className = 'log-line ' + (cls || '');
+  div.textContent = text;
+  log.appendChild(div);
+  // cap at 300 lines to avoid memory growth
+  while (log.childElementCount > 300) log.removeChild(log.firstChild);
+  wrap.scrollTop = wrap.scrollHeight;
+}
 
+function onIndexingLogLine(text, css) {
+  appendLogLine(text, css);
+  if (isIndexing && /^Done\./i.test((text || '').trim())) {
+    finalizeIndexingUI(text.trim());
+  }
+}
+
+function onIndexingProgress(current, total, msg) {
+  if (!isIndexing) {
+    return;
+  }
+  let mainText, pct;
   if (current >= 0 && total > 0) {
     pct      = Math.round(100 * current / total);
-    mainText = `Indexing files: ${current} / ${total}`;
-    // msg from Python is the current filename like "[5/120] drawing.dwg"
-    fileText = msg || '';
+    mainText = msg || `Indexing files: ${current} / ${total}`;
   } else if (msg) {
     mainText = msg;
-    pct      = -1;
+    pct      = null;
   } else {
     mainText = 'Scanning…';
-    pct      = -1;
+    pct      = null;
   }
-  setStatus('scanning', mainText, fileText, pct >= 0 ? pct : null);
+  setStatus('scanning', mainText, null, pct);
 }
 
 function onIndexingFinished(msg) {
+  finalizeIndexingUI(msg || 'Indexing completed');
+}
+
+function finalizeIndexingUI(msg) {
+  if (!isIndexing) {
+    return;
+  }
   isIndexing = false;
   const btn = document.getElementById('btn-scan');
   btn.textContent = '▶ Index Paths';
   btn.disabled = false;
-  setStatus('done', msg);
-  showToast(msg, 'success');
+  setStatus('done', 'Indexing completed');
+  document.getElementById('sb-right').textContent = msg || '';
+  const doneChip = document.getElementById('index-done-chip');
+  if (doneChip) {
+    doneChip.textContent = 'Indexing completed';
+    doneChip.style.display = 'inline-flex';
+  }
+  if (!/^Done\./i.test((msg || '').trim())) {
+    appendLogLine(msg, 'log-done');
+  }
+  showToast('Indexing completed', 'success');
   backend.getStats(function(js) { onStatsChanged(js); });
-  // Fade back to idle after 6 s
-  setTimeout(() => {
-    if (!isIndexing) setStatus('idle', 'Ready — type a block name to search');
+  // Return to normal search state after showing completion.
+  doneChipTimer = setTimeout(() => {
+    if (!isIndexing) {
+      setStatus('idle', 'Ready — type a block name to search');
+      if (doneChip) doneChip.style.display = 'none';
+    }
+    doneChipTimer = null;
   }, 6000);
 }
 
@@ -1217,6 +1495,7 @@ function onError(msg) {
   btn.textContent = '▶ Index Paths';
   btn.disabled = false;
   setStatus('error', '⚠ ' + msg);
+  appendLogLine('⚠ ' + msg, 'log-status');
   showToast(msg, 'error');
 }
 
@@ -1349,6 +1628,7 @@ function clearSearch() {
   allResults = [];
   filteredResults = [];
   renderResults([]);
+  setViewportEmpty('Select a block from search results to inspect geometry.');
 }
 
 function triggerSearch() {
@@ -1432,6 +1712,7 @@ function renderResults(results) {
   if (results.length === 0) {
     table.style.display = 'none';
     emptyState.style.display = 'flex';
+    setViewportEmpty('No selectable block in current results.');
     if (query) {
       document.getElementById('empty-title').textContent = 'No results found';
       document.getElementById('empty-msg').textContent =
@@ -1486,11 +1767,16 @@ function hlText(text, query) {
 let selectedIdx = -1;
 
 function selectRowEl(el, idx) {
+  if (selectedIdx === idx && filteredResults[idx] && viewportState.activeBlockId === filteredResults[idx].id) {
+    return;
+  }
   document.querySelectorAll('tbody tr.selected').forEach(r => r.classList.remove('selected'));
   el.classList.add('selected');
   selectedIdx = idx;
   if (backend && filteredResults[idx]) {
-    backend.recordSelection(filteredResults[idx].id);
+    const rec = filteredResults[idx];
+    backend.recordSelection(rec.id);
+    loadGeometryForRecord(rec);
   }
 }
 
@@ -1537,7 +1823,7 @@ function ctxAction(action) {
   if (action === 'open_folder') backend.openFolder(r.folder);
   if (action === 'copy_path')   { backend.copyToClipboard(r.file_path); showToast('Path copied', 'success'); }
   if (action === 'copy_name')   { backend.copyToClipboard(r.block_name); showToast('Block name copied', 'success'); }
-  if (action === 'preview')     backend.openFile(r.file_path); // fallback to open file
+  if (action === 'preview')     loadGeometryForRecord(r);
 }
 
 document.addEventListener('click', () => {
@@ -1628,6 +1914,403 @@ function fmt(n) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   Embedded Block Viewport
+══════════════════════════════════════════════════════════════ */
+function setViewportEmpty(msg) {
+  const empty = document.getElementById('viewport-empty');
+  const meta = document.getElementById('viewport-meta');
+  const title = document.getElementById('viewport-title');
+  const svg = document.getElementById('viewport-svg');
+  const img = document.getElementById('viewport-image');
+  if (!empty || !meta || !title || !svg || !img) return;
+  empty.textContent = msg;
+  empty.style.display = 'flex';
+  meta.textContent = 'No selection';
+  title.textContent = 'Block View';
+  svg.innerHTML = '';
+  svg.style.display = 'block';
+  img.style.display = 'none';
+  img.src = '';
+  img.style.transform = 'translate(0px, 0px) scale(1)';
+  viewportState.base = null;
+  viewportState.current = null;
+  viewportState.imgScale = 1;
+  viewportState.imgPanX = 0;
+  viewportState.imgPanY = 0;
+  viewportState.imgDragging = false;
+}
+
+function loadGeometryForRecord(rec) {
+  if (!backend || !rec || !rec.id) return;
+  const reqId = ++viewportState.reqId;
+  viewportState.activeBlockId = rec.id;
+  let previewApplied = false;
+  document.getElementById('viewport-empty').style.display = 'none';
+  document.getElementById('viewport-title').textContent = rec.block_name || 'Block View';
+  document.getElementById('viewport-meta').textContent = 'Loading geometry...';
+
+  // Request vector geometry immediately so we can paint quickly.
+  backend.getBlockGeometry(rec.id, function(jsonStr) {
+    if (reqId !== viewportState.reqId || previewApplied) return;
+    let data = null;
+    try {
+      data = JSON.parse(jsonStr);
+    } catch (_err) {
+      if (!previewApplied) {
+        setViewportEmpty('Failed to parse geometry payload.');
+      }
+      return;
+    }
+    if (!data || data.error) {
+      if (!previewApplied) {
+        setViewportEmpty((data && data.error) ? data.error : 'No geometry available for this block.');
+      }
+      return;
+    }
+    renderViewportGeometry(data);
+    document.getElementById('viewport-meta').textContent = 'Vector preview';
+  });
+
+  // Try indexed raster preview in parallel; if available, upgrade the viewport image.
+  backend.getBlockAccuratePreview(rec.id, function(previewStr) {
+    if (reqId !== viewportState.reqId) return;
+    let preview = null;
+    try {
+      preview = JSON.parse(previewStr);
+    } catch (_err) {
+      return;
+    }
+
+    if (preview && preview.image_path) {
+      previewApplied = true;
+      renderViewportImage(
+        preview.image_path,
+        rec.block_name || preview.block_name || 'Block View',
+        (preview.source === 'indexed') ? 'Indexed preview' : 'Raster preview'
+      );
+    } else {
+      const meta = document.getElementById('viewport-meta');
+      if (meta) {
+        meta.textContent = 'Vector fallback (no indexed PNG)';
+      }
+    }
+  });
+}
+
+function toFileUrl(path) {
+  const norm = String(path || '').replace(/\\/g, '/').replace(/^\/+/, '');
+  return encodeURI('file:///' + norm);
+}
+
+function renderViewportImage(path, blockName, sourceLabel) {
+  const img = document.getElementById('viewport-image');
+  const svg = document.getElementById('viewport-svg');
+  const empty = document.getElementById('viewport-empty');
+  const title = document.getElementById('viewport-title');
+  const meta = document.getElementById('viewport-meta');
+  if (!img || !svg || !empty || !title || !meta) return;
+
+  svg.innerHTML = '';
+  svg.style.display = 'none';
+  img.style.display = 'block';
+  img.src = toFileUrl(path);
+  empty.style.display = 'none';
+  title.textContent = blockName || 'Block View';
+  meta.textContent = sourceLabel || 'Indexed preview';
+  viewportState.base = null;
+  viewportState.current = null;
+  resetViewportImageView();
+}
+
+function renderViewportGeometry(geom) {
+  const svg = document.getElementById('viewport-svg');
+  const img = document.getElementById('viewport-image');
+  const empty = document.getElementById('viewport-empty');
+  const title = document.getElementById('viewport-title');
+  const meta = document.getElementById('viewport-meta');
+  if (!svg || !img || !empty || !title || !meta) return;
+
+  img.style.display = 'none';
+  img.src = '';
+  img.style.transform = 'translate(0px, 0px) scale(1)';
+  svg.style.display = 'block';
+
+  const entities = Array.isArray(geom.entities) ? geom.entities : [];
+  const b = geom.bounds || {};
+  if (!entities.length || b.min_x == null || b.min_y == null || b.max_x == null || b.max_y == null) {
+    setViewportEmpty('This block has no renderable 2D entities.');
+    return;
+  }
+
+  const margin = Math.max((b.max_x - b.min_x) * 0.08, (b.max_y - b.min_y) * 0.08, 5);
+  const base = {
+    x: b.min_x - margin,
+    y: -(b.max_y + margin),
+    w: (b.max_x - b.min_x) + margin * 2,
+    h: (b.max_y - b.min_y) + margin * 2,
+  };
+
+  svg.innerHTML = '';
+  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+  const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+  pattern.setAttribute('id', 'cadGrid');
+  pattern.setAttribute('width', '10');
+  pattern.setAttribute('height', '10');
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', 'M 10 0 L 0 0 0 10');
+  p.setAttribute('fill', 'none');
+  p.setAttribute('stroke', '#1f262d');
+  p.setAttribute('stroke-width', '0.2');
+  pattern.appendChild(p);
+  defs.appendChild(pattern);
+  svg.appendChild(defs);
+
+  const gridRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  gridRect.setAttribute('x', String(base.x));
+  gridRect.setAttribute('y', String(base.y));
+  gridRect.setAttribute('width', String(base.w));
+  gridRect.setAttribute('height', String(base.h));
+  gridRect.setAttribute('fill', 'url(#cadGrid)');
+  svg.appendChild(gridRect);
+
+  const layer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  layer.setAttribute('id', 'viewport-entities');
+  layer.setAttribute('stroke', '#8be9d6');
+  layer.setAttribute('fill', 'none');
+  layer.setAttribute('stroke-width', String(Math.max(base.w, base.h) / 1200));
+
+  const textLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  textLayer.setAttribute('id', 'viewport-text');
+  textLayer.setAttribute('fill', '#cfeee6');
+  textLayer.setAttribute('stroke', 'none');
+  textLayer.setAttribute('font-family', 'Segoe UI, Arial, sans-serif');
+
+  const toY = (y) => -Number(y);
+  entities.slice(0, 6000).forEach((ent) => {
+    const type = String(ent.type || '').toUpperCase();
+    if (type === 'LINE' && Array.isArray(ent.coords) && ent.coords.length >= 2) {
+      const [a, bpt] = ent.coords;
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', String(a[0]));
+      line.setAttribute('y1', String(toY(a[1])));
+      line.setAttribute('x2', String(bpt[0]));
+      line.setAttribute('y2', String(toY(bpt[1])));
+      layer.appendChild(line);
+      return;
+    }
+    if (type === 'CIRCLE' && Array.isArray(ent.center)) {
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', String(ent.center[0]));
+      circle.setAttribute('cy', String(toY(ent.center[1])));
+      circle.setAttribute('r', String(ent.radius || 0));
+      layer.appendChild(circle);
+      return;
+    }
+    if (type === 'POLYLINE' && Array.isArray(ent.coords) && ent.coords.length >= 2) {
+      const poly = document.createElementNS('http://www.w3.org/2000/svg', ent.closed ? 'polygon' : 'polyline');
+      const pts = ent.coords.map((pt) => `${pt[0]},${toY(pt[1])}`).join(' ');
+      poly.setAttribute('points', pts);
+      layer.appendChild(poly);
+      return;
+    }
+    if (type === 'ARC' && Array.isArray(ent.center)) {
+      const cx = Number(ent.center[0]);
+      const cy = Number(ent.center[1]);
+      const r = Number(ent.radius || 0);
+      const sa = Number(ent.start_angle || 0) * Math.PI / 180;
+      const ea = Number(ent.end_angle || 0) * Math.PI / 180;
+      const x1 = cx + r * Math.cos(sa);
+      const y1 = toY(cy + r * Math.sin(sa));
+      const x2 = cx + r * Math.cos(ea);
+      const y2 = toY(cy + r * Math.sin(ea));
+      const delta = ((Number(ent.end_angle || 0) - Number(ent.start_angle || 0)) % 360 + 360) % 360;
+      const largeArc = delta > 180 ? 1 : 0;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 0 ${x2} ${y2}`);
+      layer.appendChild(path);
+      return;
+    }
+    if (type === 'TEXT' && Array.isArray(ent.position)) {
+      const tx = Number(ent.position[0]);
+      const ty = toY(Number(ent.position[1]));
+      const th = Number(ent.height || 2.5);
+      const rot = Number(ent.rotation || 0);
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', String(tx));
+      t.setAttribute('y', String(ty));
+      t.setAttribute('font-size', String(Math.max(th, 0.8)));
+      t.setAttribute('dominant-baseline', 'hanging');
+      if (rot) {
+        t.setAttribute('transform', `rotate(${-rot} ${tx} ${ty})`);
+      }
+      t.textContent = String(ent.text || '');
+      textLayer.appendChild(t);
+    }
+  });
+
+  svg.appendChild(layer);
+  svg.appendChild(textLayer);
+  viewportState.base = base;
+  viewportState.current = { ...base };
+  applyViewportViewBox();
+  title.textContent = geom.block_name || 'Block View';
+  meta.textContent = `${entities.length} entities (vector fallback)`;
+  empty.style.display = 'none';
+}
+
+function applyViewportViewBox() {
+  const svg = document.getElementById('viewport-svg');
+  if (!svg || !viewportState.current) return;
+  const v = viewportState.current;
+  svg.setAttribute('viewBox', `${v.x} ${v.y} ${v.w} ${v.h}`);
+}
+
+function resetViewportView() {
+  const img = document.getElementById('viewport-image');
+  if (img && img.style.display !== 'none') {
+    resetViewportImageView();
+    return;
+  }
+  if (!viewportState.base) return;
+  viewportState.current = { ...viewportState.base };
+  applyViewportViewBox();
+}
+
+function applyViewportImageTransform() {
+  const img = document.getElementById('viewport-image');
+  if (!img) return;
+  img.style.transform = `translate(${viewportState.imgPanX}px, ${viewportState.imgPanY}px) scale(${viewportState.imgScale})`;
+}
+
+function resetViewportImageView() {
+  viewportState.imgScale = viewportState.imgMinScale;
+  viewportState.imgPanX = 0;
+  viewportState.imgPanY = 0;
+  viewportState.imgDragging = false;
+  const img = document.getElementById('viewport-image');
+  if (img) {
+    img.classList.remove('is-panning');
+  }
+  applyViewportImageTransform();
+}
+
+function initViewportPanZoom() {
+  const svg = document.getElementById('viewport-svg');
+  const img = document.getElementById('viewport-image');
+  const stage = document.getElementById('viewport-stage');
+  if (!svg || !img || !stage) return;
+
+  svg.addEventListener('wheel', function(e) {
+    if (!viewportState.current) return;
+    e.preventDefault();
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const v = viewportState.current;
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    const sx = v.x + px * v.w;
+    const sy = v.y + py * v.h;
+    const factor = e.deltaY < 0 ? 0.9 : 1.1;
+    const nextW = Math.max(viewportState.base.w * 0.08, Math.min(viewportState.base.w * 8, v.w * factor));
+    const nextH = Math.max(viewportState.base.h * 0.08, Math.min(viewportState.base.h * 8, v.h * factor));
+    viewportState.current = {
+      x: sx - px * nextW,
+      y: sy - py * nextH,
+      w: nextW,
+      h: nextH,
+    };
+    applyViewportViewBox();
+  }, { passive: false });
+
+  svg.addEventListener('mousedown', function(e) {
+    if (!viewportState.current || e.button !== 0) return;
+    viewportState.isPanning = true;
+    viewportState.startX = e.clientX;
+    viewportState.startY = e.clientY;
+    viewportState.startView = { ...viewportState.current };
+    svg.classList.add('is-panning');
+  });
+
+  img.addEventListener('load', function() {
+    resetViewportImageView();
+  });
+
+  stage.addEventListener('wheel', function(e) {
+    if (img.style.display === 'none') return;
+    e.preventDefault();
+    const rect = stage.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const oldScale = viewportState.imgScale;
+    const factor = e.deltaY < 0 ? 1.12 : 0.9;
+    const nextScale = Math.max(
+      viewportState.imgMinScale,
+      Math.min(viewportState.imgMaxScale, oldScale * factor)
+    );
+    if (Math.abs(nextScale - oldScale) < 0.0001) return;
+
+    const worldX = (x - viewportState.imgPanX) / oldScale;
+    const worldY = (y - viewportState.imgPanY) / oldScale;
+
+    viewportState.imgScale = nextScale;
+    viewportState.imgPanX = x - worldX * nextScale;
+    viewportState.imgPanY = y - worldY * nextScale;
+    applyViewportImageTransform();
+  }, { passive: false });
+
+  img.addEventListener('mousedown', function(e) {
+    if (img.style.display === 'none' || e.button !== 0) return;
+    e.preventDefault();
+    viewportState.imgDragging = true;
+    viewportState.startX = e.clientX;
+    viewportState.startY = e.clientY;
+    viewportState.imgStartPanX = viewportState.imgPanX;
+    viewportState.imgStartPanY = viewportState.imgPanY;
+    img.classList.add('is-panning');
+  });
+
+  window.addEventListener('mousemove', function(e) {
+    if (viewportState.imgDragging) {
+      const dx = e.clientX - viewportState.startX;
+      const dy = e.clientY - viewportState.startY;
+      viewportState.imgPanX = viewportState.imgStartPanX + dx;
+      viewportState.imgPanY = viewportState.imgStartPanY + dy;
+      applyViewportImageTransform();
+      return;
+    }
+
+    if (!viewportState.isPanning || !viewportState.current || !viewportState.startView) return;
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const dx = e.clientX - viewportState.startX;
+    const dy = e.clientY - viewportState.startY;
+    viewportState.current = {
+      x: viewportState.startView.x - (dx / rect.width) * viewportState.startView.w,
+      y: viewportState.startView.y - (dy / rect.height) * viewportState.startView.h,
+      w: viewportState.startView.w,
+      h: viewportState.startView.h,
+    };
+    applyViewportViewBox();
+  });
+
+  window.addEventListener('mouseup', function() {
+    if (viewportState.imgDragging) {
+      viewportState.imgDragging = false;
+      img.classList.remove('is-panning');
+    }
+
+    if (!viewportState.isPanning) return;
+    viewportState.isPanning = false;
+    viewportState.startView = null;
+    svg.classList.remove('is-panning');
+  });
+}
+
+/* ══════════════════════════════════════════════════════════════
    Column resize
 ══════════════════════════════════════════════════════════════ */
 (function initColResize() {
@@ -1660,6 +2343,9 @@ function fmt(n) {
     _th = null; _handle = null;
   });
 })();
+
+initViewportPanZoom();
+setViewportEmpty('Select a block from search results to inspect geometry.');
 </script>
 </body>
 </html>

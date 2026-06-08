@@ -14,7 +14,16 @@ import sys
 import zipfile
 from pathlib import Path
 
-VENDOR_DIR = Path(__file__).parent / "vendor" / "ODAFileConverter"
+# When frozen (onefile exe) __file__ points inside the temporary _MEIPASS dir,
+# which is deleted on exit.  Use the exe's own directory instead so the
+# downloaded ODA converter persists across launches.
+_APP_ROOT = (
+    Path(sys.executable).parent
+    if getattr(sys, "frozen", False)
+    else Path(__file__).parent
+)
+
+VENDOR_DIR = _APP_ROOT / "vendor" / "ODAFileConverter"
 ODA_EXE    = VENDOR_DIR / "ODAFileConverter.exe"
 
 # Official ODA guest download — Windows x64 ZIP build

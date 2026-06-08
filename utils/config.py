@@ -21,11 +21,28 @@ _DEFAULT_CONFIG: Dict[str, Any] = {
     "log_file": "data/app.log",
     "temp_dir": "",
     "preview_prefer_acad": True,
+    "preview_export_on_index": True,
+    "preview_image_size": 700,
 }
 
 
 def _get_base_dir() -> Path:
+    """Writable directory next to the EXE (or project root in dev)."""
     if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent.parent
+
+
+def _get_resources_dir() -> Path:
+    """Read-only resources directory.
+
+    In a onefile frozen build the bundled files land in sys._MEIPASS.
+    In a onedir build (or dev) they sit alongside the executable / in the repo.
+    """
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return Path(meipass)
         return Path(sys.executable).parent
     return Path(__file__).parent.parent
 
@@ -39,6 +56,7 @@ def _resolve_path(config: Dict[str, Any], key: str, base: Path) -> None:
 
 def load_config() -> Dict[str, Any]:
     base = _get_base_dir()
+    resources = _get_resources_dir()
     config_path = base / "config.json"
 
     config = dict(_DEFAULT_CONFIG)
@@ -52,7 +70,10 @@ def load_config() -> Dict[str, Any]:
             pass  # fall back to defaults
 
     # Resolve relative paths to absolute
-    for key in ("oda_converter_path", "db_path", "log_file"):
+    # oda_converter_path is a bundled resource — resolve against resources dir
+    # (in frozen onefile builds, resources live in sys._MEIPASS, not next to the exe)
+    _resolve_path(config, "oda_converter_path", resources)
+    for key in ("db_path", "log_file"):
         _resolve_path(config, key, base)
 
     # Ensure data directory exists
@@ -64,6 +85,7 @@ def load_config() -> Dict[str, Any]:
     log_dir.mkdir(parents=True, exist_ok=True)
 
     config["_base_dir"] = str(base)
+    config["_resources_dir"] = str(resources)
 
     return config
 
